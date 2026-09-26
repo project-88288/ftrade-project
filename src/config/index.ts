@@ -6,6 +6,12 @@ const boolFromEnv = z
   .optional()
   .transform((v) => v?.toLowerCase() === "true");
 
+const boolFromEnvDefault = (fallback: boolean) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === "" ? fallback : v.toLowerCase() === "true"));
+
 const numFromEnv = (fallback: number) =>
   z
     .string()
@@ -30,6 +36,10 @@ const schema = z.object({
   POLL_INTERVAL_SEC: numFromEnv(15),
   STATE_FILE: z.string().min(1).default("./state.json"),
   TRADE_LOG_FILE: z.string().min(1).default("./trades.jsonl"),
+  // On startup, reconcile the persisted position against the exchange balance.
+  RECONCILE: boolFromEnvDefault(true),
+  RECONCILE_TOLERANCE: numFromEnv(0.02),
+  RECONCILE_DUST: numFromEnv(0),
   // Strategy selection & parameters (see src/strategy for available strategies).
   STRATEGY: z.string().min(1).default("sma"),
   FAST_PERIOD: numFromEnv(9),
@@ -57,6 +67,9 @@ export const config = {
   pollIntervalSec: parsed.POLL_INTERVAL_SEC,
   stateFile: parsed.STATE_FILE,
   tradeLogFile: parsed.TRADE_LOG_FILE,
+  reconcile: parsed.RECONCILE,
+  reconcileTolerance: parsed.RECONCILE_TOLERANCE,
+  reconcileDust: parsed.RECONCILE_DUST,
   strategy: parsed.STRATEGY,
   strategyParams: {
     fast: parsed.FAST_PERIOD,

@@ -56,6 +56,8 @@ All configuration is via environment variables — see `.env.example`. Key ones:
 | `POLL_INTERVAL_SEC` | Seconds between exchange polls |
 | `STATE_FILE` | Path where the open position is persisted (default `./state.json`) |
 | `TRADE_LOG_FILE` | Append-only log of closed trades (default `./trades.jsonl`) |
+| `RECONCILE` | Reconcile persisted position vs. exchange balance on startup (default `true`) |
+| `RECONCILE_TOLERANCE` / `RECONCILE_DUST` | Match tolerance and dust threshold |
 
 The live bot picks its strategy from `STRATEGY` (and the matching parameter vars),
 so once you've found good params via `optimize` / `traintest` you can plug them
@@ -72,6 +74,23 @@ The bot writes its open position to `STATE_FILE` (default `./state.json`) whenev
 opens or closes, and reloads it on startup — so a restart or crash doesn't lose track
 of a live position. Writes are atomic (temp file + rename) so an interrupted write
 can't corrupt the state. The file is gitignored.
+
+### Startup reconciliation
+
+On boot (with live credentials, not in `DRY_RUN`) the bot fetches the actual
+base-asset balance and reconciles it against the persisted position, so a fill or
+manual trade that happened while it was down doesn't leave it out of sync:
+
+| Situation | Outcome |
+| --- | --- |
+| No position, no balance | `flat-confirmed` |
+| No position, but a balance exists | `unexpected-balance` — stays flat, warns |
+| Long matches balance (within `RECONCILE_TOLERANCE`) | `match` |
+| Long persisted but balance gone | `closed-externally` — clears the position |
+| Long balance drifted beyond tolerance | `quantity-adjusted` — resizes to the real balance |
+| Short position | `unverifiable-short` — can't confirm from a spot balance, kept |
+
+Set `RECONCILE=false` to disable. A balance at or below `RECONCILE_DUST` counts as flat.
 
 ### Realized-PnL trade log
 

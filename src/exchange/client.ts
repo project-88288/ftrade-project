@@ -56,6 +56,14 @@ export class ExchangeClient {
     }));
   }
 
+  /** Total balance of the market's base asset (e.g. BTC for BTC/USDT). */
+  async fetchBaseBalance(): Promise<number> {
+    const base = config.symbol.split("/")[0]!;
+    const balance = await this.exchange.fetchBalance();
+    const totals = (balance.total ?? {}) as Record<string, number | undefined>;
+    return Number(totals[base] ?? 0) || 0;
+  }
+
   async fetchPrice(): Promise<number> {
     const ticker = await this.exchange.fetchTicker(config.symbol);
     if (ticker.last == null) {

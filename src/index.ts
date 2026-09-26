@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import { config } from "./config/index.js";
 import { logger } from "./utils/logger.js";
 import { ExchangeClient } from "./exchange/client.js";
+import { reconcilePosition } from "./exchange/reconcile.js";
 import { createStrategy, isStrategyName, STRATEGY_NAMES } from "./strategy/index.js";
 import { RiskManager } from "./risk/manager.js";
 import { PositionStore } from "./state/store.js";
@@ -71,6 +72,29 @@ async function main() {
   if (position) {
     logger.info({ position }, "Resumed open position from disk");
   }
+
+  // Reconcile persisted state against the exchange in case a fill or manual trade
+  // happened while the bot was down. Requires live credentials.
+  if (config.reconcile && !config.dryRun && config.apiKey) {
+    try {
+      const actualBase = await client.fetchBaseBalance();
+      const result = reconcilePosition(position, actualBase, {
+        tolerance: config.reconcileTolerance,
+        dust: config.reconcileDust,
+      });
+      const log = result.changed ? logger.warn.bind(logger) : logger.info.bind(logger);
+      log({ status: result.status, actualBase }, `Reconciliation: ${result.message}`);
+      if (result.changed) {
+        position = result.position;
+        await store.save(position);
+      }
+    } catch (err) {
+      logger.error({ err }, "Reconciliation failed; continuing with persisted state");
+    }
+  } else if (config.reconcile) {
+    logger.info("Skipping reconciliation (dry-run or no API credentials)");
+  }
+
   let running = true;
 
   const shutdown = () => {
