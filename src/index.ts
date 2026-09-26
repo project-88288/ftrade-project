@@ -1,18 +1,54 @@
+import { parseArgs } from "node:util";
 import { config } from "./config/index.js";
 import { logger } from "./utils/logger.js";
 import { ExchangeClient } from "./exchange/client.js";
-import { SmaCrossoverStrategy } from "./strategy/sma-crossover.js";
+import { createStrategy, isStrategyName, STRATEGY_NAMES } from "./strategy/index.js";
 import { RiskManager } from "./risk/manager.js";
 import type { Position } from "./types/index.js";
 
-const POLL_INTERVAL_MS = 15_000;
+/** Resolve the strategy from env config, allowing CLI flags to override. */
+function resolveStrategy() {
+  const { values } = parseArgs({
+    options: {
+      strategy: { type: "string" },
+      fast: { type: "string" },
+      slow: { type: "string" },
+      "rsi-period": { type: "string" },
+      oversold: { type: "string" },
+      overbought: { type: "string" },
+    },
+    strict: false,
+  });
+
+  const str = (v: string | boolean | undefined) =>
+    typeof v === "string" ? v : undefined;
+  const num = (v: string | boolean | undefined, fallback: number) =>
+    typeof v === "string" ? Number(v) : fallback;
+
+  const name = str(values.strategy) ?? config.strategy;
+  if (!isStrategyName(name)) {
+    logger.fatal({ strategy: name, available: STRATEGY_NAMES }, "Unknown strategy");
+    process.exit(1);
+  }
+
+  return createStrategy(name, {
+    fast: num(values.fast, config.strategyParams.fast),
+    slow: num(values.slow, config.strategyParams.slow),
+    rsiPeriod: num(values["rsi-period"], config.strategyParams.rsiPeriod),
+    oversold: num(values.oversold, config.strategyParams.oversold),
+    overbought: num(values.overbought, config.strategyParams.overbought),
+  });
+}
 
 async function main() {
+  const { strategy, warmup } = resolveStrategy();
+
   logger.info(
     {
       exchange: config.exchangeId,
       symbol: config.symbol,
       timeframe: config.timeframe,
+      strategy: strategy.name,
       sandbox: config.sandbox,
       dryRun: config.dryRun,
     },
@@ -20,8 +56,11 @@ async function main() {
   );
 
   const client = new ExchangeClient();
-  const strategy = new SmaCrossoverStrategy();
   const risk = new RiskManager();
+
+  // Fetch enough history for the strategy to warm up, with a small buffer so a
+  // crossover on the most recent candle is still detectable.
+  const candleLimit = Math.max(100, warmup + 5);
 
   let position: Position | null = null;
   let running = true;
@@ -35,7 +74,7 @@ async function main() {
 
   while (running) {
     try {
-      const candles = await client.fetchCandles();
+      const candles = await client.fetchCandles(candleLimit);
       const price = await client.fetchPrice();
 
       // Manage an open position first (stop-loss / take-profit).
@@ -67,7 +106,7 @@ async function main() {
       logger.error({ err }, "Loop iteration failed");
     }
 
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    await new Promise((resolve) => setTimeout(resolve, config.pollIntervalSec * 1000));
   }
 
   process.exit(0);

@@ -25,6 +25,14 @@ const schema = z.object({
   STOP_LOSS_PCT: numFromEnv(2),
   TAKE_PROFIT_PCT: numFromEnv(4),
   LOG_LEVEL: z.string().default("info"),
+  POLL_INTERVAL_SEC: numFromEnv(15),
+  // Strategy selection & parameters (see src/strategy for available strategies).
+  STRATEGY: z.string().min(1).default("sma"),
+  FAST_PERIOD: numFromEnv(9),
+  SLOW_PERIOD: numFromEnv(21),
+  RSI_PERIOD: numFromEnv(14),
+  RSI_OVERSOLD: numFromEnv(30),
+  RSI_OVERBOUGHT: numFromEnv(70),
 });
 
 const parsed = schema.parse(process.env);
@@ -41,6 +49,15 @@ export const config = {
   stopLossPct: parsed.STOP_LOSS_PCT,
   takeProfitPct: parsed.TAKE_PROFIT_PCT,
   logLevel: parsed.LOG_LEVEL,
+  pollIntervalSec: parsed.POLL_INTERVAL_SEC,
+  strategy: parsed.STRATEGY,
+  strategyParams: {
+    fast: parsed.FAST_PERIOD,
+    slow: parsed.SLOW_PERIOD,
+    rsiPeriod: parsed.RSI_PERIOD,
+    oversold: parsed.RSI_OVERSOLD,
+    overbought: parsed.RSI_OVERBOUGHT,
+  },
 } as const;
 
 export type Config = typeof config;

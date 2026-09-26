@@ -48,6 +48,19 @@ All configuration is via environment variables — see `.env.example`. Key ones:
 | `DRY_RUN` | Log intended orders instead of sending them |
 | `MAX_POSITION_USD` | Notional size per position |
 | `STOP_LOSS_PCT` / `TAKE_PROFIT_PCT` | Exit thresholds |
+| `STRATEGY` | Which strategy the live bot runs: `sma`, `ema`, or `rsi` |
+| `FAST_PERIOD` / `SLOW_PERIOD` | Crossover periods (sma, ema) |
+| `RSI_PERIOD` / `RSI_OVERSOLD` / `RSI_OVERBOUGHT` | RSI parameters |
+| `POLL_INTERVAL_SEC` | Seconds between exchange polls |
+
+The live bot picks its strategy from `STRATEGY` (and the matching parameter vars),
+so once you've found good params via `optimize` / `traintest` you can plug them
+straight in. CLI flags override the env for a one-off run:
+
+```bash
+npm run dev -- --strategy ema --fast 12 --slow 26
+npm run dev -- --strategy rsi --rsi-period 14 --oversold 30 --overbought 70
+```
 
 ## Backtesting
 
