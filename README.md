@@ -205,7 +205,9 @@ ftrade_open_positions 1
 ftrade_position_entry_price{symbol="ETH/USDT",side="buy"} 3000
 ```
 
-Point a scrape job at `http://<host>:3000/metrics`.
+Point a scrape job at `http://<host>:3000/metrics`. Ready-made Prometheus scrape
+config, alerting rules, and an importable Grafana dashboard live in
+[`monitoring/`](monitoring/README.md).
 
 ## Backtesting
 

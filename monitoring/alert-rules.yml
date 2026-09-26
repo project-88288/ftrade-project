@@ -1,0 +1,52 @@
+groups:
+  - name: ftrade
+    rules:
+      # The dashboard (which exposes /metrics) is unreachable.
+      - alert: FtradeDashboardDown
+        expr: up{job="ftrade"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ftrade dashboard is down"
+          description: "Prometheus cannot scrape the ftrade dashboard ({{ $labels.instance }}) — metrics and health are unavailable."
+
+      # Cumulative realized PnL has gone negative.
+      - alert: FtradeRealizedPnLNegative
+        expr: ftrade_realized_pnl < 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ftrade realized PnL is negative"
+          description: "Net realized PnL is {{ $value | printf \"%.2f\" }} (quote currency)."
+
+      # A drawdown from the recent peak in realized PnL.
+      - alert: FtradeDrawdown
+        expr: (max_over_time(ftrade_realized_pnl[6h]) - ftrade_realized_pnl) > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ftrade drawdown exceeds threshold"
+          description: "Realized PnL has fallen {{ $value | printf \"%.2f\" }} from its 6h peak. Adjust the threshold (50) to your risk tolerance."
+
+      # Win rate is poor once there's a meaningful sample of trades.
+      - alert: FtradeLowWinRate
+        expr: ftrade_win_rate_percent < 40 and ftrade_trades_total > 20
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ftrade win rate is low"
+          description: "Win rate is {{ $value | printf \"%.1f\" }}% over {{ with query \"ftrade_trades_total\" }}{{ . | first | value }}{{ end }} trades."
+
+      # A position has stayed open unusually long — possibly stuck.
+      - alert: FtradePositionStuckOpen
+        expr: min_over_time(ftrade_open_positions[6h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ftrade has a long-lived open position"
+          description: "At least one position has been open for over 6h — check it isn't stuck."

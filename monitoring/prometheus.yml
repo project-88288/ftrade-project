@@ -1,0 +1,16 @@
+# Example Prometheus config: scrape the ftrade dashboard's /metrics and load the
+# alert rules. Point `targets` at wherever the dashboard runs.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - alert-rules.yml
+
+scrape_configs:
+  - job_name: ftrade
+    metrics_path: /metrics
+    static_configs:
+      # When Prometheus runs in the same docker compose network, use the service
+      # name and container port: dashboard:3000. Otherwise use host:port.
+      - targets: ["dashboard:3000"]
