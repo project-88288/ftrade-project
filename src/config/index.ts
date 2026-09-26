@@ -26,6 +26,7 @@ const schema = z.object({
   TAKE_PROFIT_PCT: numFromEnv(4),
   LOG_LEVEL: z.string().default("info"),
   POLL_INTERVAL_SEC: numFromEnv(15),
+  STATE_FILE: z.string().min(1).default("./state.json"),
   // Strategy selection & parameters (see src/strategy for available strategies).
   STRATEGY: z.string().min(1).default("sma"),
   FAST_PERIOD: numFromEnv(9),
@@ -50,6 +51,7 @@ export const config = {
   takeProfitPct: parsed.TAKE_PROFIT_PCT,
   logLevel: parsed.LOG_LEVEL,
   pollIntervalSec: parsed.POLL_INTERVAL_SEC,
+  stateFile: parsed.STATE_FILE,
   strategy: parsed.STRATEGY,
   strategyParams: {
     fast: parsed.FAST_PERIOD,

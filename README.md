@@ -15,6 +15,7 @@ src/
   exchange/    ccxt client wrapper (candles, price, orders)
   strategy/    Trading strategies (SMA/EMA crossover, RSI) + indicators
   risk/        Position sizing + stop-loss / take-profit
+  state/       Durable position store (survives restarts)
   backtest/    Event-driven backtester + data loader + CLI runner
   types/       Shared types
   utils/       Logger (pino)
@@ -52,6 +53,7 @@ All configuration is via environment variables — see `.env.example`. Key ones:
 | `FAST_PERIOD` / `SLOW_PERIOD` | Crossover periods (sma, ema) |
 | `RSI_PERIOD` / `RSI_OVERSOLD` / `RSI_OVERBOUGHT` | RSI parameters |
 | `POLL_INTERVAL_SEC` | Seconds between exchange polls |
+| `STATE_FILE` | Path where the open position is persisted (default `./state.json`) |
 
 The live bot picks its strategy from `STRATEGY` (and the matching parameter vars),
 so once you've found good params via `optimize` / `traintest` you can plug them
@@ -61,6 +63,13 @@ straight in. CLI flags override the env for a one-off run:
 npm run dev -- --strategy ema --fast 12 --slow 26
 npm run dev -- --strategy rsi --rsi-period 14 --oversold 30 --overbought 70
 ```
+
+### Position persistence
+
+The bot writes its open position to `STATE_FILE` (default `./state.json`) whenever it
+opens or closes, and reloads it on startup — so a restart or crash doesn't lose track
+of a live position. Writes are atomic (temp file + rename) so an interrupted write
+can't corrupt the state. The file is gitignored.
 
 ## Backtesting
 

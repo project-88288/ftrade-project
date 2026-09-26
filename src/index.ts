@@ -4,6 +4,7 @@ import { logger } from "./utils/logger.js";
 import { ExchangeClient } from "./exchange/client.js";
 import { createStrategy, isStrategyName, STRATEGY_NAMES } from "./strategy/index.js";
 import { RiskManager } from "./risk/manager.js";
+import { PositionStore } from "./state/store.js";
 import type { Position } from "./types/index.js";
 
 /** Resolve the strategy from env config, allowing CLI flags to override. */
@@ -57,12 +58,17 @@ async function main() {
 
   const client = new ExchangeClient();
   const risk = new RiskManager();
+  const store = new PositionStore(config.stateFile);
 
   // Fetch enough history for the strategy to warm up, with a small buffer so a
   // crossover on the most recent candle is still detectable.
   const candleLimit = Math.max(100, warmup + 5);
 
-  let position: Position | null = null;
+  // Resume any position left open by a previous run.
+  let position: Position | null = await store.load();
+  if (position) {
+    logger.info({ position }, "Resumed open position from disk");
+  }
   let running = true;
 
   const shutdown = () => {
@@ -83,6 +89,7 @@ async function main() {
         await client.createOrder(side, position.amount);
         logger.info({ price, entry: position.entryPrice }, "Closed position (SL/TP)");
         position = null;
+        await store.save(position);
       }
 
       const signal = strategy.evaluate(candles);
@@ -99,6 +106,7 @@ async function main() {
             amount,
             openedAt: Date.now(),
           };
+          await store.save(position);
           logger.info({ signal, price, amount }, "Opened position");
         }
       }

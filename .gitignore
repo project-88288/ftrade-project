@@ -6,3 +6,7 @@ dist/
 logs/
 coverage/
 .DS_Store
+
+# Runtime position state
+state.json
+*.state.json
