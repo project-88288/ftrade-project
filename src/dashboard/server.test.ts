@@ -91,6 +91,17 @@ describe("dashboard server", () => {
     expect(res.status).toBe(404);
   });
 
+  it("reports liveness at /health", async () => {
+    server = createDashboardServer(file);
+    const base = await listen(server);
+    const res = await fetch(base + "/health");
+    expect(res.status).toBe(200);
+    const body = await getJson(base + "/health");
+    expect(body.status).toBe("ok");
+    expect(typeof body.uptimeSec).toBe("number");
+    expect(body.uptimeSec).toBeGreaterThanOrEqual(0);
+  });
+
   it("serves Prometheus metrics at /metrics", async () => {
     await writeFile(file, JSON.stringify(trade()) + "\n");
     server = createDashboardServer(file);

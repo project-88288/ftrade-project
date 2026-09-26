@@ -183,7 +183,12 @@ npm run dashboard            # http://localhost:3000 (set DASHBOARD_PORT to chan
 It shows summary cards (trades, win rate, net PnL, fees, best/worst) and a
 newest-first trade table, auto-refreshing every 10s by reading the log fresh — so you
 can watch fills land while the bot runs. Endpoints: `/` (HTML), `/api/summary`,
-`/api/trades`, `/metrics`. Built on Node's `http` module, no extra dependencies.
+`/api/trades`, `/metrics`, `/health`. Built on Node's `http` module, no extra
+dependencies.
+
+`/health` returns `{ "status": "ok", "uptimeSec": N, "timestamp": ... }` for liveness
+checks — the compose `dashboard` service uses it as a Docker healthcheck, and it works
+as a Kubernetes liveness probe.
 
 ### Prometheus metrics
 

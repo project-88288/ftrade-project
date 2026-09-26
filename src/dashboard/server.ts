@@ -17,11 +17,20 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 export function createDashboardServer(tradeLogFile: string, stateFile?: string): Server {
   const log = new TradeLog(tradeLogFile);
   const store = stateFile ? new PositionStore(stateFile) : null;
+  const startedAt = Date.now();
 
   return createServer(async (req, res) => {
     try {
       const path = (req.url ?? "/").split("?")[0];
 
+      if (path === "/health") {
+        sendJson(res, 200, {
+          status: "ok",
+          uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
       if (path === "/") {
         res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
         res.end(PAGE_HTML);
