@@ -40,6 +40,9 @@ const schema = z.object({
   RECONCILE: boolFromEnvDefault(true),
   RECONCILE_TOLERANCE: numFromEnv(0.02),
   RECONCILE_DUST: numFromEnv(0),
+  // Telegram alerts on fills (both must be set to enable).
+  TELEGRAM_BOT_TOKEN: z.string().default(""),
+  TELEGRAM_CHAT_ID: z.string().default(""),
   // Strategy selection & parameters (see src/strategy for available strategies).
   STRATEGY: z.string().min(1).default("sma"),
   FAST_PERIOD: numFromEnv(9),
@@ -70,6 +73,8 @@ export const config = {
   reconcile: parsed.RECONCILE,
   reconcileTolerance: parsed.RECONCILE_TOLERANCE,
   reconcileDust: parsed.RECONCILE_DUST,
+  telegramBotToken: parsed.TELEGRAM_BOT_TOKEN,
+  telegramChatId: parsed.TELEGRAM_CHAT_ID,
   strategy: parsed.STRATEGY,
   strategyParams: {
     fast: parsed.FAST_PERIOD,

@@ -16,6 +16,7 @@ src/
   strategy/    Trading strategies (SMA/EMA crossover, RSI) + indicators
   risk/        Position sizing + stop-loss / take-profit
   state/       Durable position store (survives restarts)
+  notify/      Telegram alerts on fills
   backtest/    Event-driven backtester + data loader + CLI runner
   types/       Shared types
   utils/       Logger (pino)
@@ -58,6 +59,7 @@ All configuration is via environment variables — see `.env.example`. Key ones:
 | `TRADE_LOG_FILE` | Append-only log of closed trades (default `./trades.jsonl`) |
 | `RECONCILE` | Reconcile persisted position vs. exchange balance on startup (default `true`) |
 | `RECONCILE_TOLERANCE` / `RECONCILE_DUST` | Match tolerance and dust threshold |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Set both to get Telegram alerts on fills |
 
 The live bot picks its strategy from `STRATEGY` (and the matching parameter vars),
 so once you've found good params via `optimize` / `traintest` you can plug them
@@ -74,6 +76,23 @@ The bot writes its open position to `STATE_FILE` (default `./state.json`) whenev
 opens or closes, and reloads it on startup — so a restart or crash doesn't lose track
 of a live position. Writes are atomic (temp file + rename) so an interrupted write
 can't corrupt the state. The file is gitignored.
+
+### Telegram alerts
+
+Get a message whenever the bot opens or closes a position. Set both
+`TELEGRAM_BOT_TOKEN` (from [@BotFather](https://t.me/BotFather)) and
+`TELEGRAM_CHAT_ID` (from [@userinfobot](https://t.me/userinfobot)); leave either
+blank to disable. Alerts include side, price, amount/PnL, fees, and whether the run
+is `LIVE` or `DRY_RUN`:
+
+```
+🟢 Opened BUY BTC/USDT @ 61250.5
+Amount: 0.00163, fee 0.10 — DRY_RUN
+Reason: Fast EMA crossed above slow EMA
+```
+
+Delivery is best-effort — a Telegram outage is logged as a warning and never
+interrupts trading.
 
 ### Startup reconciliation
 

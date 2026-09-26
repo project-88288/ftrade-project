@@ -7,6 +7,7 @@ import { createStrategy, isStrategyName, STRATEGY_NAMES } from "./strategy/index
 import { RiskManager } from "./risk/manager.js";
 import { PositionStore } from "./state/store.js";
 import { TradeLog, closeTrade } from "./state/trade-log.js";
+import { createNotifier } from "./notify/telegram.js";
 import type { Position } from "./types/index.js";
 
 /** Resolve the strategy from env config, allowing CLI flags to override. */
@@ -62,6 +63,7 @@ async function main() {
   const risk = new RiskManager();
   const store = new PositionStore(config.stateFile);
   const tradeLog = new TradeLog(config.tradeLogFile);
+  const notifier = createNotifier();
 
   // Fetch enough history for the strategy to warm up, with a small buffer so a
   // crossover on the most recent candle is still detectable.
@@ -119,8 +121,13 @@ async function main() {
           { price: fill.price, entry: position.entryPrice, pnl: trade.pnl, fees: trade.fees },
           "Closed position (SL/TP)",
         );
+        const closed = position;
         position = null;
         await store.save(position);
+        await notifier.send(
+          `🔴 Closed ${closed.side.toUpperCase()} ${config.symbol} @ ${fill.price}\n` +
+            `PnL: ${trade.pnl.toFixed(2)} (${trade.pnlPct.toFixed(2)}%), fees ${trade.fees.toFixed(2)} — ${config.dryRun ? "DRY_RUN" : "LIVE"}`,
+        );
       }
 
       const signal = strategy.evaluate(candles);
@@ -142,6 +149,11 @@ async function main() {
           logger.info(
             { signal, price: fill.price, amount: fill.amount, entryFee: fill.feeQuote },
             "Opened position",
+          );
+          await notifier.send(
+            `🟢 Opened ${signal.side.toUpperCase()} ${config.symbol} @ ${fill.price}\n` +
+              `Amount: ${fill.amount}, fee ${fill.feeQuote.toFixed(2)} — ${config.dryRun ? "DRY_RUN" : "LIVE"}\n` +
+              `Reason: ${signal.reason}`,
           );
         }
       }
