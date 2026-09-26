@@ -86,6 +86,38 @@ Max drawdown:   0.05%
 
 Stop-loss / take-profit are read from your `.env` (`STOP_LOSS_PCT` / `TAKE_PROFIT_PCT`).
 
+## Optimizing (parameter sweep)
+
+Grid-search a strategy's parameters to find the best-performing combination. Ranges
+accept a single value (`9`), a list (`5,10,15`), or `start:end:step` (`5:15:2`,
+inclusive). Invalid combos (`fast >= slow`, `oversold >= overbought`) are skipped.
+
+```bash
+# Sweep EMA fast/slow, rank by return
+npm run optimize -- --strategy ema --fast 5:15:2 --slow 20:40:5
+
+# Sweep RSI, rank by win rate, require at least 5 trades, show top 15
+npm run optimize -- --strategy rsi --rsi-period 7:21:7 --oversold 20,25,30 \
+  --overbought 70,75,80 --metric winRate --min-trades 5 --top 15
+```
+
+Flags: `--metric return|winRate|trades`, `--min-trades N` (filters out combos with too
+few trades to be meaningful), `--top N` (rows to print). Sample output:
+
+```
+=== Parameter Sweep: RSI (ranked by winRate) ===
+Tested 27 combos, 23 passed the min-trades filter.
+
+  #  params                      return%  trades    win%   maxDD%
+  1  p=14 os=30 ob=70               0.12       8    75.0     0.06
+  2  p=7  os=20 ob=80               0.10      10    70.0     0.06
+  ...
+```
+
+> ⚠️ Grid-search invites overfitting — a combo that looks best on past data may not
+> generalize. Use `--min-trades` to avoid rewarding lucky one-off trades, and validate
+> a promising combo on a separate time period before trusting it.
+
 ## Strategies
 
 Select a strategy with `--strategy` in the backtester. All are built on the shared
