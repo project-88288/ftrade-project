@@ -47,6 +47,7 @@ const schema = z.object({
   // Telegram alerts on fills (both must be set to enable).
   TELEGRAM_BOT_TOKEN: z.string().default(""),
   TELEGRAM_CHAT_ID: z.string().default(""),
+  DASHBOARD_PORT: numFromEnv(3000),
   // Strategy selection & parameters (see src/strategy for available strategies).
   STRATEGY: z.string().min(1).default("sma"),
   // Optional per-symbol strategy overrides as JSON, e.g.
@@ -98,6 +99,7 @@ export const config = {
   reconcileDust: parsed.RECONCILE_DUST,
   telegramBotToken: parsed.TELEGRAM_BOT_TOKEN,
   telegramChatId: parsed.TELEGRAM_CHAT_ID,
+  dashboardPort: parsed.DASHBOARD_PORT,
   strategy: parsed.STRATEGY,
   symbolStrategies,
   strategyParams: {

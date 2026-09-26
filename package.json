@@ -11,6 +11,7 @@
     "optimize": "tsx src/backtest/optimize-run.ts",
     "traintest": "tsx src/backtest/traintest-run.ts",
     "pnl": "tsx src/state/pnl-report.ts",
+    "dashboard": "tsx src/dashboard/run.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

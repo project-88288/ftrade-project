@@ -17,6 +17,7 @@ src/
   risk/        Position sizing + stop-loss / take-profit
   state/       Durable position store (survives restarts)
   notify/      Telegram alerts on fills
+  dashboard/   Web dashboard for the PnL log
   backtest/    Event-driven backtester + data loader + CLI runner
   types/       Shared types
   utils/       Logger (pino)
@@ -168,6 +169,19 @@ Live PnL is **fee-accurate**: each order's actual fee is read back from the exch
 (ccxt `order.fee`/`fees`, converted to quote currency), stored with the position on
 entry, and netted out on close. `DRY_RUN` orders estimate the fee from `FEE_RATE`.
 The backtester models fees separately via `--fee`.
+
+### Web dashboard
+
+Prefer a browser over the terminal? Serve the same trade log as a live dashboard:
+
+```bash
+npm run dashboard            # http://localhost:3000 (set DASHBOARD_PORT to change)
+```
+
+It shows summary cards (trades, win rate, net PnL, fees, best/worst) and a
+newest-first trade table, auto-refreshing every 10s by reading the log fresh — so you
+can watch fills land while the bot runs. Endpoints: `/` (HTML), `/api/summary`,
+`/api/trades`. Built on Node's `http` module, no extra dependencies.
 
 ## Backtesting
 
