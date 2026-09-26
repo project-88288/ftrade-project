@@ -39,9 +39,9 @@ export class ExchangeClient {
     }
   }
 
-  async fetchCandles(limit = 100): Promise<Candle[]> {
+  async fetchCandles(symbol: string, limit = 100): Promise<Candle[]> {
     const raw = await this.exchange.fetchOHLCV(
-      config.symbol,
+      symbol,
       config.timeframe,
       undefined,
       limit,
@@ -56,18 +56,21 @@ export class ExchangeClient {
     }));
   }
 
-  /** Total balance of the market's base asset (e.g. BTC for BTC/USDT). */
-  async fetchBaseBalance(): Promise<number> {
-    const base = config.symbol.split("/")[0]!;
+  /** Total balances keyed by asset (e.g. `{ BTC: 0.5, USDT: 1000 }`). */
+  async fetchBalances(): Promise<Record<string, number>> {
     const balance = await this.exchange.fetchBalance();
     const totals = (balance.total ?? {}) as Record<string, number | undefined>;
-    return Number(totals[base] ?? 0) || 0;
+    const out: Record<string, number> = {};
+    for (const [asset, amount] of Object.entries(totals)) {
+      out[asset] = Number(amount ?? 0) || 0;
+    }
+    return out;
   }
 
-  async fetchPrice(): Promise<number> {
-    const ticker = await this.exchange.fetchTicker(config.symbol);
+  async fetchPrice(symbol: string): Promise<number> {
+    const ticker = await this.exchange.fetchTicker(symbol);
     if (ticker.last == null) {
-      throw new Error(`No last price available for ${config.symbol}`);
+      throw new Error(`No last price available for ${symbol}`);
     }
     return ticker.last;
   }
@@ -77,6 +80,7 @@ export class ExchangeClient {
    * fallback fill price and to estimate the fee for DRY_RUN orders.
    */
   async createOrder(
+    symbol: string,
     side: "buy" | "sell",
     amount: number,
     refPrice: number,
@@ -84,17 +88,17 @@ export class ExchangeClient {
     if (config.dryRun) {
       const feeQuote = refPrice * amount * config.feeRate;
       logger.warn(
-        { side, amount, symbol: config.symbol, estFee: feeQuote },
+        { side, amount, symbol, estFee: feeQuote },
         "DRY_RUN: skipping real order (fee estimated)",
       );
       return { price: refPrice, amount, feeQuote };
     }
 
-    const order = await this.exchange.createOrder(config.symbol, "market", side, amount);
+    const order = await this.exchange.createOrder(symbol, "market", side, amount);
     const price = order.average ?? order.price ?? refPrice;
     const filled = order.filled ?? amount;
-    const feeQuote = this.feeToQuote(order, price);
-    logger.info({ id: order.id, side, amount: filled, price, feeQuote }, "Order filled");
+    const feeQuote = this.feeToQuote(order, price, symbol);
+    logger.info({ id: order.id, symbol, side, amount: filled, price, feeQuote }, "Order filled");
     return { price, amount: filled, feeQuote };
   }
 
@@ -103,8 +107,8 @@ export class ExchangeClient {
    * either the quote asset (e.g. USDT) or the base asset (e.g. BTC); base-asset
    * fees are converted at the fill price.
    */
-  private feeToQuote(order: Order, fillPrice: number): number {
-    const base = config.symbol.split("/")[0];
+  private feeToQuote(order: Order, fillPrice: number, symbol: string): number {
+    const base = symbol.split("/")[0];
     // ccxt's types only declare `fee` (singular), but most exchanges also populate
     // a `fees` array at runtime — prefer it when present.
     type FeeEntry = { cost?: number; currency?: string } | undefined;

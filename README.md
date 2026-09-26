@@ -45,7 +45,8 @@ All configuration is via environment variables — see `.env.example`. Key ones:
 | Var | Meaning |
 | --- | --- |
 | `EXCHANGE_ID` | Any ccxt exchange id (e.g. `binance`) |
-| `SYMBOL` | Market to trade, e.g. `BTC/USDT` |
+| `SYMBOL` | Default market for the backtest/optimize CLIs, e.g. `BTC/USDT` |
+| `SYMBOLS` | Comma-separated markets the live bot trades concurrently (falls back to `SYMBOL`) |
 | `SANDBOX` | Use the exchange testnet when `true` |
 | `DRY_RUN` | Log intended orders instead of sending them |
 | `MAX_POSITION_USD` | Notional size per position |
@@ -69,6 +70,20 @@ straight in. CLI flags override the env for a one-off run:
 npm run dev -- --strategy ema --fast 12 --slow 26
 npm run dev -- --strategy rsi --rsi-period 14 --oversold 30 --overbought 70
 ```
+
+### Multi-symbol trading
+
+Set `SYMBOLS` to trade several markets concurrently — each polled every cycle with
+its own independent position, sized to `MAX_POSITION_USD`:
+
+```bash
+SYMBOLS="BTC/USDT,ETH/USDT,SOL/USDT" npm run dev
+```
+
+The same strategy runs across all symbols (strategies are stateless — they read the
+candle window each time). Positions are stored per symbol in `STATE_FILE`, and a
+failure on one symbol is logged and skipped without affecting the others. Note total
+exposure scales with the number of symbols (`N × MAX_POSITION_USD`).
 
 ### Position persistence
 

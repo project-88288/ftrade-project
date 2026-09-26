@@ -24,6 +24,9 @@ const schema = z.object({
   EXCHANGE_API_KEY: z.string().default(""),
   EXCHANGE_SECRET: z.string().default(""),
   SYMBOL: z.string().min(1).default("BTC/USDT"),
+  // Comma-separated markets for the live bot to trade concurrently. Falls back to
+  // SYMBOL when unset.
+  SYMBOLS: z.string().default(""),
   TIMEFRAME: z.string().min(1).default("1m"),
   SANDBOX: boolFromEnv,
   DRY_RUN: boolFromEnv,
@@ -54,11 +57,18 @@ const schema = z.object({
 
 const parsed = schema.parse(process.env);
 
+const symbols = parsed.SYMBOLS
+  ? parsed.SYMBOLS.split(",").map((s) => s.trim()).filter(Boolean)
+  : [parsed.SYMBOL];
+
 export const config = {
   exchangeId: parsed.EXCHANGE_ID,
   apiKey: parsed.EXCHANGE_API_KEY,
   secret: parsed.EXCHANGE_SECRET,
+  /** Single default symbol — used by the backtest/optimize CLIs. */
   symbol: parsed.SYMBOL,
+  /** Markets the live bot trades concurrently. */
+  symbols,
   timeframe: parsed.TIMEFRAME,
   sandbox: parsed.SANDBOX,
   dryRun: parsed.DRY_RUN,

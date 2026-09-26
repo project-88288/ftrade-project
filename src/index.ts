@@ -7,8 +7,19 @@ import { createStrategy, isStrategyName, STRATEGY_NAMES } from "./strategy/index
 import { RiskManager } from "./risk/manager.js";
 import { PositionStore } from "./state/store.js";
 import { TradeLog, closeTrade } from "./state/trade-log.js";
-import { createNotifier } from "./notify/telegram.js";
-import type { Position } from "./types/index.js";
+import { createNotifier, type Notifier } from "./notify/telegram.js";
+import type { ExchangeClient as Client } from "./exchange/client.js";
+import type { Strategy, Position } from "./types/index.js";
+
+interface TradeDeps {
+  client: Client;
+  strategy: Strategy;
+  risk: RiskManager;
+  store: PositionStore;
+  tradeLog: TradeLog;
+  notifier: Notifier;
+  candleLimit: number;
+}
 
 /** Resolve the strategy from env config, allowing CLI flags to override. */
 function resolveStrategy() {
@@ -44,13 +55,101 @@ function resolveStrategy() {
   });
 }
 
+/** Run one poll iteration for a single symbol, mutating & persisting `positions`. */
+async function tradeSymbol(
+  symbol: string,
+  deps: TradeDeps,
+  positions: Map<string, Position>,
+): Promise<void> {
+  const { client, strategy, risk, store, tradeLog, notifier } = deps;
+  const candles = await client.fetchCandles(symbol, deps.candleLimit);
+  const price = await client.fetchPrice(symbol);
+
+  // Manage an open position first (stop-loss / take-profit).
+  const open = positions.get(symbol);
+  if (open && risk.shouldExit(open, price)) {
+    const side = risk.exitSide(open);
+    const fill = await client.createOrder(symbol, side, open.amount, price);
+    const trade = closeTrade(open, fill.price, "stop-loss/take-profit", fill.feeQuote);
+    await tradeLog.append(trade);
+    positions.delete(symbol);
+    await store.save(positions);
+    logger.info(
+      { symbol, price: fill.price, entry: open.entryPrice, pnl: trade.pnl, fees: trade.fees },
+      "Closed position (SL/TP)",
+    );
+    await notifier.send(
+      `🔴 Closed ${open.side.toUpperCase()} ${symbol} @ ${fill.price}\n` +
+        `PnL: ${trade.pnl.toFixed(2)} (${trade.pnlPct.toFixed(2)}%), fees ${trade.fees.toFixed(2)} — ${config.dryRun ? "DRY_RUN" : "LIVE"}`,
+    );
+  }
+
+  const signal = strategy.evaluate(candles);
+  logger.debug({ symbol, signal, price }, "Evaluated strategy");
+
+  if (!positions.has(symbol) && signal.side !== "hold") {
+    const amount = risk.positionSize(price);
+    if (amount > 0) {
+      const fill = await client.createOrder(symbol, signal.side, amount, price);
+      const position: Position = {
+        symbol,
+        side: signal.side,
+        entryPrice: fill.price,
+        amount: fill.amount,
+        openedAt: Date.now(),
+        entryFee: fill.feeQuote,
+      };
+      positions.set(symbol, position);
+      await store.save(positions);
+      logger.info(
+        { symbol, signal, price: fill.price, amount: fill.amount, entryFee: fill.feeQuote },
+        "Opened position",
+      );
+      await notifier.send(
+        `🟢 Opened ${signal.side.toUpperCase()} ${symbol} @ ${fill.price}\n` +
+          `Amount: ${fill.amount}, fee ${fill.feeQuote.toFixed(2)} — ${config.dryRun ? "DRY_RUN" : "LIVE"}\n` +
+          `Reason: ${signal.reason}`,
+      );
+    }
+  }
+}
+
+/**
+ * Reconcile every persisted position against the exchange balances. Only tracked
+ * symbols are checked, so assets held outside the bot don't raise false alarms.
+ */
+async function reconcileAll(
+  client: Client,
+  store: PositionStore,
+  positions: Map<string, Position>,
+): Promise<void> {
+  const balances = await client.fetchBalances();
+  let changed = false;
+  for (const symbol of [...positions.keys()]) {
+    const base = symbol.split("/")[0]!;
+    const actualBase = balances[base] ?? 0;
+    const result = reconcilePosition(positions.get(symbol) ?? null, actualBase, {
+      tolerance: config.reconcileTolerance,
+      dust: config.reconcileDust,
+    });
+    const log = result.changed ? logger.warn.bind(logger) : logger.info.bind(logger);
+    log({ symbol, status: result.status, actualBase }, `Reconciliation: ${result.message}`);
+    if (result.changed) {
+      if (result.position) positions.set(symbol, result.position);
+      else positions.delete(symbol);
+      changed = true;
+    }
+  }
+  if (changed) await store.save(positions);
+}
+
 async function main() {
   const { strategy, warmup } = resolveStrategy();
 
   logger.info(
     {
       exchange: config.exchangeId,
-      symbol: config.symbol,
+      symbols: config.symbols,
       timeframe: config.timeframe,
       strategy: strategy.name,
       sandbox: config.sandbox,
@@ -59,37 +158,29 @@ async function main() {
     "Starting ftrade bot",
   );
 
-  const client = new ExchangeClient();
-  const risk = new RiskManager();
-  const store = new PositionStore(config.stateFile);
-  const tradeLog = new TradeLog(config.tradeLogFile);
-  const notifier = createNotifier();
+  const deps: TradeDeps = {
+    client: new ExchangeClient(),
+    strategy,
+    risk: new RiskManager(),
+    store: new PositionStore(config.stateFile),
+    tradeLog: new TradeLog(config.tradeLogFile),
+    notifier: createNotifier(),
+    // Fetch enough history for the strategy to warm up, with a small buffer so a
+    // crossover on the most recent candle is still detectable.
+    candleLimit: Math.max(100, warmup + 5),
+  };
 
-  // Fetch enough history for the strategy to warm up, with a small buffer so a
-  // crossover on the most recent candle is still detectable.
-  const candleLimit = Math.max(100, warmup + 5);
-
-  // Resume any position left open by a previous run.
-  let position: Position | null = await store.load();
-  if (position) {
-    logger.info({ position }, "Resumed open position from disk");
+  // Resume positions left open by a previous run.
+  const positions = await deps.store.load();
+  if (positions.size > 0) {
+    logger.info({ symbols: [...positions.keys()] }, "Resumed open positions from disk");
   }
 
-  // Reconcile persisted state against the exchange in case a fill or manual trade
+  // Reconcile persisted state against the exchange in case fills or manual trades
   // happened while the bot was down. Requires live credentials.
   if (config.reconcile && !config.dryRun && config.apiKey) {
     try {
-      const actualBase = await client.fetchBaseBalance();
-      const result = reconcilePosition(position, actualBase, {
-        tolerance: config.reconcileTolerance,
-        dust: config.reconcileDust,
-      });
-      const log = result.changed ? logger.warn.bind(logger) : logger.info.bind(logger);
-      log({ status: result.status, actualBase }, `Reconciliation: ${result.message}`);
-      if (result.changed) {
-        position = result.position;
-        await store.save(position);
-      }
+      await reconcileAll(deps.client, deps.store, positions);
     } catch (err) {
       logger.error({ err }, "Reconciliation failed; continuing with persisted state");
     }
@@ -107,58 +198,13 @@ async function main() {
   process.on("SIGTERM", shutdown);
 
   while (running) {
-    try {
-      const candles = await client.fetchCandles(candleLimit);
-      const price = await client.fetchPrice();
-
-      // Manage an open position first (stop-loss / take-profit).
-      if (position && risk.shouldExit(position, price)) {
-        const side = risk.exitSide(position);
-        const fill = await client.createOrder(side, position.amount, price);
-        const trade = closeTrade(position, fill.price, "stop-loss/take-profit", fill.feeQuote);
-        await tradeLog.append(trade);
-        logger.info(
-          { price: fill.price, entry: position.entryPrice, pnl: trade.pnl, fees: trade.fees },
-          "Closed position (SL/TP)",
-        );
-        const closed = position;
-        position = null;
-        await store.save(position);
-        await notifier.send(
-          `🔴 Closed ${closed.side.toUpperCase()} ${config.symbol} @ ${fill.price}\n` +
-            `PnL: ${trade.pnl.toFixed(2)} (${trade.pnlPct.toFixed(2)}%), fees ${trade.fees.toFixed(2)} — ${config.dryRun ? "DRY_RUN" : "LIVE"}`,
-        );
+    for (const symbol of config.symbols) {
+      if (!running) break;
+      try {
+        await tradeSymbol(symbol, deps, positions);
+      } catch (err) {
+        logger.error({ err, symbol }, "Symbol iteration failed");
       }
-
-      const signal = strategy.evaluate(candles);
-      logger.debug({ signal, price }, "Evaluated strategy");
-
-      if (!position && signal.side !== "hold") {
-        const amount = risk.positionSize(price);
-        if (amount > 0) {
-          const fill = await client.createOrder(signal.side, amount, price);
-          position = {
-            symbol: config.symbol,
-            side: signal.side,
-            entryPrice: fill.price,
-            amount: fill.amount,
-            openedAt: Date.now(),
-            entryFee: fill.feeQuote,
-          };
-          await store.save(position);
-          logger.info(
-            { signal, price: fill.price, amount: fill.amount, entryFee: fill.feeQuote },
-            "Opened position",
-          );
-          await notifier.send(
-            `🟢 Opened ${signal.side.toUpperCase()} ${config.symbol} @ ${fill.price}\n` +
-              `Amount: ${fill.amount}, fee ${fill.feeQuote.toFixed(2)} — ${config.dryRun ? "DRY_RUN" : "LIVE"}\n` +
-              `Reason: ${signal.reason}`,
-          );
-        }
-      }
-    } catch (err) {
-      logger.error({ err }, "Loop iteration failed");
     }
 
     await new Promise((resolve) => setTimeout(resolve, config.pollIntervalSec * 1000));
