@@ -90,4 +90,16 @@ describe("dashboard server", () => {
     const res = await fetch(base + "/nope");
     expect(res.status).toBe(404);
   });
+
+  it("serves Prometheus metrics at /metrics", async () => {
+    await writeFile(file, JSON.stringify(trade()) + "\n");
+    server = createDashboardServer(file);
+    const base = await listen(server);
+    const res = await fetch(base + "/metrics");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/plain");
+    const body = await res.text();
+    expect(body).toContain("ftrade_trades_total 1");
+    expect(body).toContain("ftrade_realized_pnl 19");
+  });
 });

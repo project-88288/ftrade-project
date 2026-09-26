@@ -1,5 +1,7 @@
 import { createServer, type Server, type ServerResponse } from "node:http";
 import { TradeLog, summarize } from "../state/trade-log.js";
+import { PositionStore } from "../state/store.js";
+import { renderMetrics, PROM_CONTENT_TYPE } from "../metrics/prometheus.js";
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -7,12 +9,14 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 /**
- * A tiny read-only dashboard for the realized-PnL trade log. Serves an HTML page
- * plus `/api/summary` and `/api/trades`, reading the log fresh on each request so
- * it reflects live trading. Built on Node's http module — no extra dependencies.
+ * A tiny read-only dashboard for the realized-PnL trade log. Serves an HTML page,
+ * `/api/summary`, `/api/trades`, and Prometheus `/metrics` — reading the log (and
+ * position state) fresh on each request so it reflects live trading. Built on Node's
+ * http module — no extra dependencies.
  */
-export function createDashboardServer(tradeLogFile: string): Server {
+export function createDashboardServer(tradeLogFile: string, stateFile?: string): Server {
   const log = new TradeLog(tradeLogFile);
+  const store = stateFile ? new PositionStore(stateFile) : null;
 
   return createServer(async (req, res) => {
     try {
@@ -31,6 +35,15 @@ export function createDashboardServer(tradeLogFile: string): Server {
         // Most recent first.
         const trades = (await log.readAll()).slice().reverse();
         sendJson(res, 200, trades);
+        return;
+      }
+      if (path === "/metrics") {
+        const [trades, positions] = await Promise.all([
+          log.readAll(),
+          store ? store.load() : Promise.resolve(new Map()),
+        ]);
+        res.writeHead(200, { "content-type": PROM_CONTENT_TYPE });
+        res.end(renderMetrics(trades, positions));
         return;
       }
 

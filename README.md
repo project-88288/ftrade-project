@@ -183,7 +183,24 @@ npm run dashboard            # http://localhost:3000 (set DASHBOARD_PORT to chan
 It shows summary cards (trades, win rate, net PnL, fees, best/worst) and a
 newest-first trade table, auto-refreshing every 10s by reading the log fresh — so you
 can watch fills land while the bot runs. Endpoints: `/` (HTML), `/api/summary`,
-`/api/trades`. Built on Node's `http` module, no extra dependencies.
+`/api/trades`, `/metrics`. Built on Node's `http` module, no extra dependencies.
+
+### Prometheus metrics
+
+The dashboard also exposes `/metrics` in Prometheus text format, derived from the
+trade log and current position state — scrape it into Prometheus/Grafana for
+monitoring and alerting:
+
+```
+ftrade_trades_total 12
+ftrade_wins_total 7
+ftrade_realized_pnl 1.08
+ftrade_fees_total 0.12
+ftrade_open_positions 1
+ftrade_position_entry_price{symbol="ETH/USDT",side="buy"} 3000
+```
+
+Point a scrape job at `http://<host>:3000/metrics`.
 
 ## Backtesting
 

@@ -3,7 +3,7 @@ import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";
 import { createDashboardServer } from "./server.js";
 
-const server = createDashboardServer(config.tradeLogFile);
+const server = createDashboardServer(config.tradeLogFile, config.stateFile);
 
 server.listen(config.dashboardPort, () => {
   logger.info(
