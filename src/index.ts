@@ -5,6 +5,7 @@ import { ExchangeClient } from "./exchange/client.js";
 import { createStrategy, isStrategyName, STRATEGY_NAMES } from "./strategy/index.js";
 import { RiskManager } from "./risk/manager.js";
 import { PositionStore } from "./state/store.js";
+import { TradeLog, closeTrade } from "./state/trade-log.js";
 import type { Position } from "./types/index.js";
 
 /** Resolve the strategy from env config, allowing CLI flags to override. */
@@ -59,6 +60,7 @@ async function main() {
   const client = new ExchangeClient();
   const risk = new RiskManager();
   const store = new PositionStore(config.stateFile);
+  const tradeLog = new TradeLog(config.tradeLogFile);
 
   // Fetch enough history for the strategy to warm up, with a small buffer so a
   // crossover on the most recent candle is still detectable.
@@ -87,7 +89,12 @@ async function main() {
       if (position && risk.shouldExit(position, price)) {
         const side = risk.exitSide(position);
         await client.createOrder(side, position.amount);
-        logger.info({ price, entry: position.entryPrice }, "Closed position (SL/TP)");
+        const trade = closeTrade(position, price, "stop-loss/take-profit");
+        await tradeLog.append(trade);
+        logger.info(
+          { price, entry: position.entryPrice, pnl: trade.pnl, pnlPct: trade.pnlPct },
+          "Closed position (SL/TP)",
+        );
         position = null;
         await store.save(position);
       }

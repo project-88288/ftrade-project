@@ -54,6 +54,7 @@ All configuration is via environment variables — see `.env.example`. Key ones:
 | `RSI_PERIOD` / `RSI_OVERSOLD` / `RSI_OVERBOUGHT` | RSI parameters |
 | `POLL_INTERVAL_SEC` | Seconds between exchange polls |
 | `STATE_FILE` | Path where the open position is persisted (default `./state.json`) |
+| `TRADE_LOG_FILE` | Append-only log of closed trades (default `./trades.jsonl`) |
 
 The live bot picks its strategy from `STRATEGY` (and the matching parameter vars),
 so once you've found good params via `optimize` / `traintest` you can plug them
@@ -70,6 +71,30 @@ The bot writes its open position to `STATE_FILE` (default `./state.json`) whenev
 opens or closes, and reloads it on startup — so a restart or crash doesn't lose track
 of a live position. Writes are atomic (temp file + rename) so an interrupted write
 can't corrupt the state. The file is gitignored.
+
+### Realized-PnL trade log
+
+Every time the bot closes a position it appends a record — entry/exit price, amount,
+realized PnL and return % — to `TRADE_LOG_FILE` (default `./trades.jsonl`, one JSON
+object per line). Review your track record with:
+
+```bash
+npm run pnl            # summary: trades, win rate, total/avg/best/worst PnL
+npm run pnl -- --list  # also print every trade
+```
+
+```
+=== Realized PnL ===
+Trades:      3
+Win / Loss:  2 / 1  (66.7% win)
+Total PnL:   1.20
+Avg PnL:     0.40
+Best / Worst:1.20 / -1.20
+====================
+```
+
+> PnL is gross of exchange fees (the live bot uses market orders whose fees aren't
+> known until fill). The backtester models fees explicitly via `--fee`.
 
 ## Backtesting
 

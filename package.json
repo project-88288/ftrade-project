@@ -10,6 +10,7 @@
     "backtest": "tsx src/backtest/run.ts",
     "optimize": "tsx src/backtest/optimize-run.ts",
     "traintest": "tsx src/backtest/traintest-run.ts",
+    "pnl": "tsx src/state/pnl-report.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

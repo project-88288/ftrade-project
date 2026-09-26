@@ -10,3 +10,5 @@ coverage/
 # Runtime position state
 state.json
 *.state.json
+trades.jsonl
+*.trades.jsonl
