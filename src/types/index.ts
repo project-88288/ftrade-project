@@ -31,3 +31,13 @@ export interface Strategy {
   readonly name: string;
   evaluate(candles: Candle[]): Signal;
 }
+
+/** Per-symbol strategy override; unset fields fall back to the global config. */
+export interface SymbolStrategyOverride {
+  strategy?: string;
+  fast?: number;
+  slow?: number;
+  rsiPeriod?: number;
+  oversold?: number;
+  overbought?: number;
+}

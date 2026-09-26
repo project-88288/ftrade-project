@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
+import type { SymbolStrategyOverride } from "../types/index.js";
 
 const boolFromEnv = z
   .string()
@@ -48,6 +49,9 @@ const schema = z.object({
   TELEGRAM_CHAT_ID: z.string().default(""),
   // Strategy selection & parameters (see src/strategy for available strategies).
   STRATEGY: z.string().min(1).default("sma"),
+  // Optional per-symbol strategy overrides as JSON, e.g.
+  // {"BTC/USDT":{"strategy":"ema","fast":12,"slow":26},"ETH/USDT":{"strategy":"rsi"}}
+  SYMBOL_STRATEGIES: z.string().default(""),
   FAST_PERIOD: numFromEnv(9),
   SLOW_PERIOD: numFromEnv(21),
   RSI_PERIOD: numFromEnv(14),
@@ -60,6 +64,15 @@ const parsed = schema.parse(process.env);
 const symbols = parsed.SYMBOLS
   ? parsed.SYMBOLS.split(",").map((s) => s.trim()).filter(Boolean)
   : [parsed.SYMBOL];
+
+let symbolStrategies: Record<string, SymbolStrategyOverride> = {};
+if (parsed.SYMBOL_STRATEGIES) {
+  try {
+    symbolStrategies = JSON.parse(parsed.SYMBOL_STRATEGIES);
+  } catch {
+    throw new Error("SYMBOL_STRATEGIES must be valid JSON");
+  }
+}
 
 export const config = {
   exchangeId: parsed.EXCHANGE_ID,
@@ -86,6 +99,7 @@ export const config = {
   telegramBotToken: parsed.TELEGRAM_BOT_TOKEN,
   telegramChatId: parsed.TELEGRAM_CHAT_ID,
   strategy: parsed.STRATEGY,
+  symbolStrategies,
   strategyParams: {
     fast: parsed.FAST_PERIOD,
     slow: parsed.SLOW_PERIOD,

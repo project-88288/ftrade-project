@@ -3,26 +3,32 @@ import { config } from "./config/index.js";
 import { logger } from "./utils/logger.js";
 import { ExchangeClient } from "./exchange/client.js";
 import { reconcilePosition } from "./exchange/reconcile.js";
-import { createStrategy, isStrategyName, STRATEGY_NAMES } from "./strategy/index.js";
+import {
+  isStrategyName,
+  resolveSymbolStrategies,
+  STRATEGY_NAMES,
+  type StrategyName,
+  type StrategyParams,
+  type ResolvedStrategy,
+} from "./strategy/index.js";
 import { RiskManager } from "./risk/manager.js";
 import { PositionStore } from "./state/store.js";
 import { TradeLog, closeTrade } from "./state/trade-log.js";
 import { createNotifier, type Notifier } from "./notify/telegram.js";
 import type { ExchangeClient as Client } from "./exchange/client.js";
-import type { Strategy, Position } from "./types/index.js";
+import type { Position } from "./types/index.js";
 
 interface TradeDeps {
   client: Client;
-  strategy: Strategy;
+  strategies: Map<string, ResolvedStrategy>;
   risk: RiskManager;
   store: PositionStore;
   tradeLog: TradeLog;
   notifier: Notifier;
-  candleLimit: number;
 }
 
-/** Resolve the strategy from env config, allowing CLI flags to override. */
-function resolveStrategy() {
+/** Resolve the global default strategy from env config, with CLI flag overrides. */
+function resolveDefaultSpec(): { name: StrategyName; params: StrategyParams } {
   const { values } = parseArgs({
     options: {
       strategy: { type: "string" },
@@ -46,13 +52,16 @@ function resolveStrategy() {
     process.exit(1);
   }
 
-  return createStrategy(name, {
-    fast: num(values.fast, config.strategyParams.fast),
-    slow: num(values.slow, config.strategyParams.slow),
-    rsiPeriod: num(values["rsi-period"], config.strategyParams.rsiPeriod),
-    oversold: num(values.oversold, config.strategyParams.oversold),
-    overbought: num(values.overbought, config.strategyParams.overbought),
-  });
+  return {
+    name,
+    params: {
+      fast: num(values.fast, config.strategyParams.fast),
+      slow: num(values.slow, config.strategyParams.slow),
+      rsiPeriod: num(values["rsi-period"], config.strategyParams.rsiPeriod),
+      oversold: num(values.oversold, config.strategyParams.oversold),
+      overbought: num(values.overbought, config.strategyParams.overbought),
+    },
+  };
 }
 
 /** Run one poll iteration for a single symbol, mutating & persisting `positions`. */
@@ -61,8 +70,12 @@ async function tradeSymbol(
   deps: TradeDeps,
   positions: Map<string, Position>,
 ): Promise<void> {
-  const { client, strategy, risk, store, tradeLog, notifier } = deps;
-  const candles = await client.fetchCandles(symbol, deps.candleLimit);
+  const { client, risk, store, tradeLog, notifier } = deps;
+  const spec = deps.strategies.get(symbol);
+  if (!spec) return;
+  // Enough history for warmup, plus a buffer so a fresh crossover is detectable.
+  const candleLimit = Math.max(100, spec.warmup + 5);
+  const candles = await client.fetchCandles(symbol, candleLimit);
   const price = await client.fetchPrice(symbol);
 
   // Manage an open position first (stop-loss / take-profit).
@@ -84,8 +97,8 @@ async function tradeSymbol(
     );
   }
 
-  const signal = strategy.evaluate(candles);
-  logger.debug({ symbol, signal, price }, "Evaluated strategy");
+  const signal = spec.strategy.evaluate(candles);
+  logger.debug({ symbol, strategy: spec.strategy.name, signal, price }, "Evaluated strategy");
 
   if (!positions.has(symbol) && signal.side !== "hold") {
     const amount = risk.positionSize(price);
@@ -144,14 +157,23 @@ async function reconcileAll(
 }
 
 async function main() {
-  const { strategy, warmup } = resolveStrategy();
+  const { name, params } = resolveDefaultSpec();
+
+  let strategies: Map<string, ResolvedStrategy>;
+  try {
+    strategies = resolveSymbolStrategies(config.symbols, name, params, config.symbolStrategies);
+  } catch (err) {
+    logger.fatal({ err }, "Invalid strategy configuration");
+    process.exit(1);
+  }
 
   logger.info(
     {
       exchange: config.exchangeId,
-      symbols: config.symbols,
       timeframe: config.timeframe,
-      strategy: strategy.name,
+      strategies: Object.fromEntries(
+        [...strategies].map(([symbol, s]) => [symbol, s.strategy.name]),
+      ),
       sandbox: config.sandbox,
       dryRun: config.dryRun,
     },
@@ -160,14 +182,11 @@ async function main() {
 
   const deps: TradeDeps = {
     client: new ExchangeClient(),
-    strategy,
+    strategies,
     risk: new RiskManager(),
     store: new PositionStore(config.stateFile),
     tradeLog: new TradeLog(config.tradeLogFile),
     notifier: createNotifier(),
-    // Fetch enough history for the strategy to warm up, with a small buffer so a
-    // crossover on the most recent candle is still detectable.
-    candleLimit: Math.max(100, warmup + 5),
   };
 
   // Resume positions left open by a previous run.

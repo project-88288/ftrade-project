@@ -80,10 +80,25 @@ its own independent position, sized to `MAX_POSITION_USD`:
 SYMBOLS="BTC/USDT,ETH/USDT,SOL/USDT" npm run dev
 ```
 
-The same strategy runs across all symbols (strategies are stateless — they read the
-candle window each time). Positions are stored per symbol in `STATE_FILE`, and a
-failure on one symbol is logged and skipped without affecting the others. Note total
-exposure scales with the number of symbols (`N × MAX_POSITION_USD`).
+By default the global strategy runs across all symbols (strategies are stateless —
+they read the candle window each time). Positions are stored per symbol in
+`STATE_FILE`, and a failure on one symbol is logged and skipped without affecting the
+others. Note total exposure scales with the number of symbols (`N × MAX_POSITION_USD`).
+
+### Per-symbol strategies
+
+Give individual symbols their own strategy and parameters with `SYMBOL_STRATEGIES`
+(JSON). Any field left out falls back to the global config; symbols not listed use the
+global default strategy:
+
+```bash
+SYMBOLS="BTC/USDT,ETH/USDT,SOL/USDT" \
+SYMBOL_STRATEGIES='{"BTC/USDT":{"strategy":"ema","fast":12,"slow":26},"ETH/USDT":{"strategy":"rsi","rsiPeriod":14}}' \
+npm run dev
+```
+
+Here BTC/USDT runs `EMA(12/26)`, ETH/USDT runs `RSI(14)`, and SOL/USDT falls back to
+the global `STRATEGY`. An unknown strategy name aborts startup with a clear error.
 
 ### Position persistence
 
