@@ -301,3 +301,13 @@ npm run backtest -- --strategy rsi --rsi-period 14 --oversold 30 --overbought 70
 Implement the `Strategy` interface — a `name` and an `evaluate(candles: Candle[]): Signal`
 method (see `src/strategy/sma-crossover.ts`). Register it in `src/strategy/index.ts` so
 it's selectable from the CLI, and/or wire it into `src/index.ts` for live trading.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request to `main`, across
+Node 20 and 22: `npm ci`, then type-check, tests, and build. Once you've pushed the
+repo to GitHub, add a status badge to the top of this file (replace `OWNER/REPO`):
+
+```markdown
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+```

@@ -12,7 +12,7 @@
     "traintest": "tsx src/backtest/traintest-run.ts",
     "pnl": "tsx src/state/pnl-report.ts",
     "dashboard": "tsx src/dashboard/run.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -25,6 +25,9 @@
     "typescript"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "ccxt": "^4.4.0",
     "dotenv": "^16.4.5",
