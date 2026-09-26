@@ -13,7 +13,7 @@ orders — with a dry-run mode so you can watch it think before risking capital.
 src/
   config/      Environment loading & validation (zod)
   exchange/    ccxt client wrapper (candles, price, orders)
-  strategy/    Trading strategies (SMA crossover reference impl)
+  strategy/    Trading strategies (SMA/EMA crossover, RSI) + indicators
   risk/        Position sizing + stop-loss / take-profit
   backtest/    Event-driven backtester + data loader + CLI runner
   types/       Shared types
@@ -86,7 +86,24 @@ Max drawdown:   0.05%
 
 Stop-loss / take-profit are read from your `.env` (`STOP_LOSS_PCT` / `TAKE_PROFIT_PCT`).
 
+## Strategies
+
+Select a strategy with `--strategy` in the backtester. All are built on the shared
+indicator helpers in `src/strategy/indicators.ts` (`sma`, `ema`, `rsi`).
+
+| Name | Class | Parameters | Idea |
+| --- | --- | --- | --- |
+| `sma` | `SmaCrossoverStrategy` | `--fast --slow` | Trend-following: fast SMA crossing the slow SMA |
+| `ema` | `EmaCrossoverStrategy` | `--fast --slow` | Like SMA but EMAs react faster to recent price |
+| `rsi` | `RsiStrategy` | `--rsi-period --oversold --overbought` | Mean-reversion: buy exiting oversold, sell exiting overbought |
+
+```bash
+npm run backtest -- --strategy ema --fast 12 --slow 26
+npm run backtest -- --strategy rsi --rsi-period 14 --oversold 30 --overbought 70
+```
+
 ## Writing your own strategy
 
-Implement an `evaluate(candles: Candle[]): Signal` method (see
-`src/strategy/sma-crossover.ts`) and wire it into `src/index.ts`.
+Implement the `Strategy` interface — a `name` and an `evaluate(candles: Candle[]): Signal`
+method (see `src/strategy/sma-crossover.ts`). Register it in `src/strategy/index.ts` so
+it's selectable from the CLI, and/or wire it into `src/index.ts` for live trading.

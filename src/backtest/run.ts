@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";
-import { SmaCrossoverStrategy } from "../strategy/sma-crossover.js";
+import { createStrategy, isStrategyName, STRATEGY_NAMES } from "../strategy/index.js";
 import { backtest } from "./engine.js";
 import { fetchHistory, loadCsv } from "./data.js";
 import type { Candle } from "../types/index.js";
@@ -10,11 +10,14 @@ import type { Candle } from "../types/index.js";
  * CLI: backtest a strategy over historical data.
  *
  *   npm run backtest -- --limit 2000
- *   npm run backtest -- --csv ./data/btc.csv --fast 5 --slow 20
+ *   npm run backtest -- --strategy ema --fast 12 --slow 26
+ *   npm run backtest -- --strategy rsi --rsi-period 14 --oversold 30 --overbought 70
+ *   npm run backtest -- --csv ./data/btc.csv --strategy sma --fast 5 --slow 20
  */
 async function main() {
   const { values } = parseArgs({
     options: {
+      strategy: { type: "string", default: "sma" },
       exchange: { type: "string", default: config.exchangeId },
       symbol: { type: "string", default: config.symbol },
       timeframe: { type: "string", default: config.timeframe },
@@ -22,15 +25,31 @@ async function main() {
       csv: { type: "string" },
       fast: { type: "string", default: "9" },
       slow: { type: "string", default: "21" },
+      "rsi-period": { type: "string", default: "14" },
+      oversold: { type: "string", default: "30" },
+      overbought: { type: "string", default: "70" },
       cash: { type: "string", default: "10000" },
       size: { type: "string", default: String(config.maxPositionUsd) },
       fee: { type: "string", default: "0.001" },
     },
   });
 
-  const fast = Number(values.fast);
-  const slow = Number(values.slow);
-  const strategy = new SmaCrossoverStrategy(fast, slow);
+  const strategyName = values.strategy!;
+  if (!isStrategyName(strategyName)) {
+    logger.fatal(
+      { strategy: strategyName, available: STRATEGY_NAMES },
+      "Unknown strategy",
+    );
+    process.exit(1);
+  }
+
+  const { strategy, warmup } = createStrategy(strategyName, {
+    fast: Number(values.fast),
+    slow: Number(values.slow),
+    rsiPeriod: Number(values["rsi-period"]),
+    oversold: Number(values.oversold),
+    overbought: Number(values.overbought),
+  });
 
   let candles: Candle[];
   if (values.csv) {
@@ -55,7 +74,7 @@ async function main() {
     initialCash: Number(values.cash),
     positionUsd: Number(values.size),
     feeRate: Number(values.fee),
-    warmup: slow + 1,
+    warmup,
     stopLossPct: config.stopLossPct,
     takeProfitPct: config.takeProfitPct,
   });
