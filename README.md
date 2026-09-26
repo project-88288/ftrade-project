@@ -1,5 +1,7 @@
 # ftrade-project
 
+[![CI](https://github.com/project-88288/ftrade-project/actions/workflows/ci.yml/badge.svg)](https://github.com/project-88288/ftrade-project/actions/workflows/ci.yml)
+
 A TypeScript trading bot scaffold built on [ccxt](https://github.com/ccxt/ccxt). It
 polls an exchange, runs a pluggable strategy, applies risk management, and places
 orders — with a dry-run mode so you can watch it think before risking capital.
@@ -305,11 +307,7 @@ it's selectable from the CLI, and/or wire it into `src/index.ts` for live tradin
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every push and pull request to `main`, across
-Node 20 and 22: `npm ci`, then type-check, tests, and build. Once you've pushed the
-repo to GitHub, add a status badge to the top of this file (replace `OWNER/REPO`):
-
-```markdown
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
-```
+Node 20 and 22: `npm ci`, then type-check, tests, and build. The status badge at the
+top of this file reflects the latest run on `main`.
 #   f t r a d e - p r o j e c t  
  
