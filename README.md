@@ -49,6 +49,7 @@ All configuration is via environment variables — see `.env.example`. Key ones:
 | `DRY_RUN` | Log intended orders instead of sending them |
 | `MAX_POSITION_USD` | Notional size per position |
 | `STOP_LOSS_PCT` / `TAKE_PROFIT_PCT` | Exit thresholds |
+| `FEE_RATE` | Fee rate for estimating `DRY_RUN` order fees (real orders use actual fees) |
 | `STRATEGY` | Which strategy the live bot runs: `sma`, `ema`, or `rsi` |
 | `FAST_PERIOD` / `SLOW_PERIOD` | Crossover periods (sma, ema) |
 | `RSI_PERIOD` / `RSI_OVERSOLD` / `RSI_OVERBOUGHT` | RSI parameters |
@@ -84,17 +85,21 @@ npm run pnl -- --list  # also print every trade
 ```
 
 ```
-=== Realized PnL ===
-Trades:      3
-Win / Loss:  2 / 1  (66.7% win)
-Total PnL:   1.20
-Avg PnL:     0.40
-Best / Worst:1.20 / -1.20
-====================
+=== Realized PnL (net of fees) ===
+Trades:       2
+Win / Loss:   1 / 1  (50.0% win)
+Gross PnL:    0.00
+Fees:         0.24
+Net PnL:      -0.24
+Avg net PnL:  -0.12
+Best / Worst: 1.08 / -1.32
+==================================
 ```
 
-> PnL is gross of exchange fees (the live bot uses market orders whose fees aren't
-> known until fill). The backtester models fees explicitly via `--fee`.
+Live PnL is **fee-accurate**: each order's actual fee is read back from the exchange
+(ccxt `order.fee`/`fees`, converted to quote currency), stored with the position on
+entry, and netted out on close. `DRY_RUN` orders estimate the fee from `FEE_RATE`.
+The backtester models fees separately via `--fee`.
 
 ## Backtesting
 

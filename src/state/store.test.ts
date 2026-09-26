@@ -11,6 +11,7 @@ const samplePosition: Position = {
   entryPrice: 50000,
   amount: 0.002,
   openedAt: 1_700_000_000_000,
+  entryFee: 0.1,
 };
 
 describe("PositionStore", () => {

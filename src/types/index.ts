@@ -22,6 +22,8 @@ export interface Position {
   entryPrice: number;
   amount: number;
   openedAt: number;
+  /** Fee paid to open the position, in quote currency. */
+  entryFee: number;
 }
 
 /** A trading strategy evaluates recent candles and emits a signal. */

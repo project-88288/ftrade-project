@@ -24,6 +24,8 @@ const schema = z.object({
   MAX_POSITION_USD: numFromEnv(100),
   STOP_LOSS_PCT: numFromEnv(2),
   TAKE_PROFIT_PCT: numFromEnv(4),
+  // Only used to estimate fees for DRY_RUN orders; real orders report actual fees.
+  FEE_RATE: numFromEnv(0.001),
   LOG_LEVEL: z.string().default("info"),
   POLL_INTERVAL_SEC: numFromEnv(15),
   STATE_FILE: z.string().min(1).default("./state.json"),
@@ -50,6 +52,7 @@ export const config = {
   maxPositionUsd: parsed.MAX_POSITION_USD,
   stopLossPct: parsed.STOP_LOSS_PCT,
   takeProfitPct: parsed.TAKE_PROFIT_PCT,
+  feeRate: parsed.FEE_RATE,
   logLevel: parsed.LOG_LEVEL,
   pollIntervalSec: parsed.POLL_INTERVAL_SEC,
   stateFile: parsed.STATE_FILE,

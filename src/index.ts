@@ -88,11 +88,11 @@ async function main() {
       // Manage an open position first (stop-loss / take-profit).
       if (position && risk.shouldExit(position, price)) {
         const side = risk.exitSide(position);
-        await client.createOrder(side, position.amount);
-        const trade = closeTrade(position, price, "stop-loss/take-profit");
+        const fill = await client.createOrder(side, position.amount, price);
+        const trade = closeTrade(position, fill.price, "stop-loss/take-profit", fill.feeQuote);
         await tradeLog.append(trade);
         logger.info(
-          { price, entry: position.entryPrice, pnl: trade.pnl, pnlPct: trade.pnlPct },
+          { price: fill.price, entry: position.entryPrice, pnl: trade.pnl, fees: trade.fees },
           "Closed position (SL/TP)",
         );
         position = null;
@@ -105,16 +105,20 @@ async function main() {
       if (!position && signal.side !== "hold") {
         const amount = risk.positionSize(price);
         if (amount > 0) {
-          await client.createOrder(signal.side, amount);
+          const fill = await client.createOrder(signal.side, amount, price);
           position = {
             symbol: config.symbol,
             side: signal.side,
-            entryPrice: price,
-            amount,
+            entryPrice: fill.price,
+            amount: fill.amount,
             openedAt: Date.now(),
+            entryFee: fill.feeQuote,
           };
           await store.save(position);
-          logger.info({ signal, price, amount }, "Opened position");
+          logger.info(
+            { signal, price: fill.price, amount: fill.amount, entryFee: fill.feeQuote },
+            "Opened position",
+          );
         }
       }
     } catch (err) {

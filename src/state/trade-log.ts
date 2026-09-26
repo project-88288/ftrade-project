@@ -9,24 +9,35 @@ export interface ClosedTrade {
   amount: number;
   entryTime: number;
   exitTime: number;
-  /** Realized profit in quote currency (gross — excludes exchange fees). */
+  /** Profit in quote currency before fees. */
+  grossPnl: number;
+  /** Total entry + exit fees, in quote currency. */
+  fees: number;
+  /** Realized profit in quote currency, net of fees. */
   pnl: number;
-  /** Return on the position's notional, as a percentage. */
+  /** Net return on the position's notional, as a percentage. */
   pnlPct: number;
   reason: string;
 }
 
-/** Compute the realized trade record for a position being closed at `exitPrice`. */
+/**
+ * Compute the realized trade record for a position being closed at `exitPrice`.
+ * `exitFee` is the fee (quote currency) paid on the closing order; the entry fee
+ * is read from the position. Net PnL subtracts both.
+ */
 export function closeTrade(
   position: Position,
   exitPrice: number,
   reason: string,
+  exitFee = 0,
   exitTime = Date.now(),
 ): ClosedTrade {
-  const gross =
+  const grossPnl =
     position.side === "buy"
       ? (exitPrice - position.entryPrice) * position.amount
       : (position.entryPrice - exitPrice) * position.amount;
+  const fees = (position.entryFee ?? 0) + exitFee;
+  const pnl = grossPnl - fees;
   const notional = position.entryPrice * position.amount;
   return {
     symbol: position.symbol,
@@ -36,8 +47,10 @@ export function closeTrade(
     amount: position.amount,
     entryTime: position.openedAt,
     exitTime,
-    pnl: gross,
-    pnlPct: notional > 0 ? (gross / notional) * 100 : 0,
+    grossPnl,
+    fees,
+    pnl,
+    pnlPct: notional > 0 ? (pnl / notional) * 100 : 0,
     reason,
   };
 }
@@ -47,7 +60,10 @@ export interface TradeSummary {
   wins: number;
   losses: number;
   winRatePct: number;
+  /** Net of fees. */
   totalPnl: number;
+  totalGrossPnl: number;
+  totalFees: number;
   avgPnl: number;
   bestPnl: number;
   worstPnl: number;
@@ -91,12 +107,16 @@ export function summarize(trades: ClosedTrade[]): TradeSummary {
   const losses = trades.filter((t) => t.pnl <= 0).length;
   const pnls = trades.map((t) => t.pnl);
   const totalPnl = pnls.reduce((a, b) => a + b, 0);
+  const totalGrossPnl = trades.reduce((a, t) => a + t.grossPnl, 0);
+  const totalFees = trades.reduce((a, t) => a + t.fees, 0);
   return {
     trades: trades.length,
     wins,
     losses,
     winRatePct: trades.length > 0 ? (wins / trades.length) * 100 : 0,
     totalPnl,
+    totalGrossPnl,
+    totalFees,
     avgPnl: trades.length > 0 ? totalPnl / trades.length : 0,
     bestPnl: pnls.length > 0 ? Math.max(...pnls) : 0,
     worstPnl: pnls.length > 0 ? Math.min(...pnls) : 0,

@@ -37,13 +37,15 @@ async function main() {
   }
 
   const s = summarize(trades);
-  console.log("\n=== Realized PnL ===");
-  console.log(`Trades:      ${s.trades}`);
-  console.log(`Win / Loss:  ${s.wins} / ${s.losses}  (${s.winRatePct.toFixed(1)}% win)`);
-  console.log(`Total PnL:   ${s.totalPnl.toFixed(2)}`);
-  console.log(`Avg PnL:     ${s.avgPnl.toFixed(2)}`);
-  console.log(`Best / Worst:${s.bestPnl.toFixed(2)} / ${s.worstPnl.toFixed(2)}`);
-  console.log("====================\n");
+  console.log("\n=== Realized PnL (net of fees) ===");
+  console.log(`Trades:       ${s.trades}`);
+  console.log(`Win / Loss:   ${s.wins} / ${s.losses}  (${s.winRatePct.toFixed(1)}% win)`);
+  console.log(`Gross PnL:    ${s.totalGrossPnl.toFixed(2)}`);
+  console.log(`Fees:         ${s.totalFees.toFixed(2)}`);
+  console.log(`Net PnL:      ${s.totalPnl.toFixed(2)}`);
+  console.log(`Avg net PnL:  ${s.avgPnl.toFixed(2)}`);
+  console.log(`Best / Worst: ${s.bestPnl.toFixed(2)} / ${s.worstPnl.toFixed(2)}`);
+  console.log("==================================\n");
 }
 
 main().catch((err) => {
