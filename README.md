@@ -304,6 +304,31 @@ Implement the `Strategy` interface — a `name` and an `evaluate(candles: Candle
 method (see `src/strategy/sma-crossover.ts`). Register it in `src/strategy/index.ts` so
 it's selectable from the CLI, and/or wire it into `src/index.ts` for live trading.
 
+## Docker
+
+A multi-stage `Dockerfile` builds TypeScript in a full-deps stage, then ships only
+the compiled `dist/` and production dependencies in a slim runtime image that runs as
+an unprivileged user.
+
+```bash
+# Build and run just the bot
+docker build -t ftrade-project .
+docker run --rm --env-file .env ftrade-project
+```
+
+`docker compose` runs the bot and the dashboard together, sharing one data volume so
+the dashboard reads the same trade log the bot writes:
+
+```bash
+cp .env.example .env          # fill in your values first
+docker compose up -d --build  # dashboard on http://localhost:3000
+docker compose logs -f bot
+```
+
+State and the trade log persist in the named `ftrade-data` volume (mounted at
+`/app/data`), so they survive container restarts. Override the default entrypoint to
+run the dashboard standalone: `docker run ... ftrade-project node dist/dashboard/run.js`.
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every push and pull request to `main`, across

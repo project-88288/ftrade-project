@@ -1,0 +1,37 @@
+# Runs the trading bot and the PnL dashboard as two containers sharing one data
+# volume, so the dashboard reads the same trade log the bot writes.
+#
+#   cp .env.example .env   # fill in your values first
+#   docker compose up -d --build
+#
+services:
+  bot:
+    build: .
+    image: ftrade-project
+    env_file: .env
+    environment:
+      # Keep state + trade log on the shared volume regardless of .env.
+      STATE_FILE: /app/data/state.json
+      TRADE_LOG_FILE: /app/data/trades.jsonl
+    volumes:
+      - ftrade-data:/app/data
+    init: true
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    image: ftrade-project
+    command: ["node", "dist/dashboard/run.js"]
+    env_file: .env
+    environment:
+      TRADE_LOG_FILE: /app/data/trades.jsonl
+      DASHBOARD_PORT: "3000"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ftrade-data:/app/data
+    init: true
+    restart: unless-stopped
+
+volumes:
+  ftrade-data:
