@@ -353,6 +353,27 @@ State and the trade log persist in the named `ftrade-data` volume (mounted at
 `/app/data`), so they survive container restarts. Override the default entrypoint to
 run the dashboard standalone: `docker run ... ftrade-project node dist/dashboard/run.js`.
 
+### Full stack with monitoring
+
+`docker-compose.monitoring.yml` is an overlay that adds Prometheus and Grafana,
+pre-provisioned with the datasource and the ftrade dashboard — the whole stack comes
+up with one command:
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --build
+```
+
+| Service | URL |
+| --- | --- |
+| Dashboard | http://localhost:3000 |
+| Grafana | http://localhost:3001 (admin / admin) |
+| Prometheus | http://localhost:9090 |
+
+Grafana opens straight to the **ftrade — Trading** dashboard with Prometheus already
+wired up; Prometheus scrapes the dashboard's `/metrics` and evaluates the alert rules.
+Change the Grafana admin password before exposing it anywhere.
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every push and pull request to `main`, across
