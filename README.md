@@ -116,7 +116,35 @@ Tested 27 combos, 23 passed the min-trades filter.
 
 > ⚠️ Grid-search invites overfitting — a combo that looks best on past data may not
 > generalize. Use `--min-trades` to avoid rewarding lucky one-off trades, and validate
-> a promising combo on a separate time period before trusting it.
+> a promising combo on a separate time period before trusting it (see below).
+
+## Train/test validation
+
+Measures overfitting directly. The data is split chronologically: parameters are
+optimized on the earlier **train** slice, then the single best combo is applied,
+untouched, to the later **test** slice. If in-sample returns look great but
+out-of-sample collapses, the params were fitted to noise.
+
+```bash
+npm run traintest -- --strategy ema --fast 5:15:2 --slow 20:40:5 --train-ratio 0.7
+```
+
+Takes the same range/metric/`--min-trades` flags as `optimize`, plus `--train-ratio`
+(fraction of candles used for training, default `0.7`). Sample output:
+
+```
+=== Train/Test Validation: EMA ===
+Split:          70% train / 30% test
+Best params:    fast=15 slow=20  (chosen by return in-sample)
+
+--- IN-SAMPLE  (train) ---
+  return:   0.04%   trades: 25 (28.0% win)   max DD: 0.10%
+--- OUT-OF-SAMPLE (test) ---
+  return:   0.07%   trades:  9 (44.4% win)   max DD: 0.04%
+
+Return decay (train - test): -0.04 pts
+✓  Out-of-sample performance held up reasonably.
+```
 
 ## Strategies
 
