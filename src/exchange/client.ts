@@ -31,6 +31,7 @@ export class ExchangeClient {
       apiKey: config.apiKey,
       secret: config.secret,
       enableRateLimit: true,
+      options: { defaultType: config.marketType === "future" ? "future" : "spot" },
     });
 
     if (config.sandbox && typeof this.exchange.setSandboxMode === "function") {
@@ -39,9 +40,51 @@ export class ExchangeClient {
     }
   }
 
+  /**
+   * Map a unified spot symbol (BASE/QUOTE) to the venue symbol for the configured
+   * market type. Binance USDT-margined perpetuals use BASE/QUOTE:QUOTE notation.
+   */
+  private marketSymbol(symbol: string): string {
+    if (config.marketType !== "future" || symbol.includes(":")) return symbol;
+    const quote = symbol.split("/")[1];
+    return quote ? `${symbol}:${quote}` : symbol;
+  }
+
+  /**
+   * Set margin mode and leverage for each futures market. Best-effort: exchanges
+   * reject setMarginMode when it is already the current mode, which is not an error.
+   */
+  async configureMarkets(symbols: string[]): Promise<void> {
+    if (config.marketType !== "future") return;
+    for (const symbol of symbols) {
+      const market = this.marketSymbol(symbol);
+      try {
+        if (typeof this.exchange.setMarginMode === "function") {
+          await this.exchange.setMarginMode(config.marginMode, market);
+        }
+      } catch (err) {
+        logger.warn(
+          { symbol: market, err: (err as Error).message },
+          "Could not set margin mode (may already be set)",
+        );
+      }
+      try {
+        if (typeof this.exchange.setLeverage === "function") {
+          await this.exchange.setLeverage(config.leverage, market);
+        }
+        logger.info(
+          { symbol: market, leverage: config.leverage, marginMode: config.marginMode },
+          "Configured futures market",
+        );
+      } catch (err) {
+        logger.warn({ symbol: market, err: (err as Error).message }, "Could not set leverage");
+      }
+    }
+  }
+
   async fetchCandles(symbol: string, limit = 100): Promise<Candle[]> {
     const raw = await this.exchange.fetchOHLCV(
-      symbol,
+      this.marketSymbol(symbol),
       config.timeframe,
       undefined,
       limit,
@@ -68,11 +111,18 @@ export class ExchangeClient {
   }
 
   async fetchPrice(symbol: string): Promise<number> {
-    const ticker = await this.exchange.fetchTicker(symbol);
+    const ticker = await this.exchange.fetchTicker(this.marketSymbol(symbol));
     if (ticker.last == null) {
       throw new Error(`No last price available for ${symbol}`);
     }
     return ticker.last;
+  }
+
+  /** Free balance of a single quote asset (e.g. USDT), used for % position sizing. */
+  async fetchQuoteBalance(quote: string): Promise<number> {
+    const balance = await this.exchange.fetchBalance();
+    const free = (balance.free ?? {}) as Record<string, number | undefined>;
+    return Number(free[quote] ?? 0) || 0;
   }
 
   /**
@@ -94,7 +144,7 @@ export class ExchangeClient {
       return { price: refPrice, amount, feeQuote };
     }
 
-    const order = await this.exchange.createOrder(symbol, "market", side, amount);
+    const order = await this.exchange.createOrder(this.marketSymbol(symbol), "market", side, amount);
     const price = order.average ?? order.price ?? refPrice;
     const filled = order.filled ?? amount;
     const feeQuote = this.feeToQuote(order, price, symbol);
