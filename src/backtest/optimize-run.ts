@@ -5,9 +5,8 @@ import { isStrategyName, STRATEGY_NAMES, type StrategyParams } from "../strategy
 import { fetchHistory, loadCsv } from "./data.js";
 import {
   buildGrid,
-  parseRange,
+  rangesFromArgs,
   sweep,
-  type GridRanges,
   type OptimizeMetric,
 } from "./optimize.js";
 import type { Candle } from "../types/index.js";
@@ -33,9 +32,16 @@ async function main() {
       // Ranges: "5", "5,10,15" or "start:end:step".
       fast: { type: "string", default: "5:15" },
       slow: { type: "string", default: "20:40:5" },
+      signal: { type: "string", default: "9" },
       "rsi-period": { type: "string", default: "7:21:7" },
       oversold: { type: "string", default: "20,25,30" },
       overbought: { type: "string", default: "70,75,80" },
+      "bb-period": { type: "string", default: "10:30:5" },
+      "bb-stddev": { type: "string", default: "1.5,2,2.5" },
+      "stoch-k": { type: "string", default: "9,14,21" },
+      "stoch-d": { type: "string", default: "3" },
+      "donchian-period": { type: "string", default: "10:40:5" },
+      "trend-period": { type: "string", default: "50,100,200" },
       cash: { type: "string", default: "10000" },
       size: { type: "string", default: String(config.maxPositionUsd) },
       fee: { type: "string", default: "0.001" },
@@ -57,17 +63,7 @@ async function main() {
     process.exit(1);
   }
 
-  const ranges: GridRanges =
-    strategyName === "rsi"
-      ? {
-          rsiPeriod: parseRange(values["rsi-period"]!),
-          oversold: parseRange(values.oversold!),
-          overbought: parseRange(values.overbought!),
-        }
-      : {
-          fast: parseRange(values.fast!),
-          slow: parseRange(values.slow!),
-        };
+  const ranges = rangesFromArgs(strategyName, values as Record<string, string | undefined>);
 
   const combos = buildGrid(strategyName, ranges);
   if (combos.length === 0) {
@@ -137,8 +133,22 @@ async function main() {
 }
 
 function formatParams(name: string, p: StrategyParams): string {
-  if (name === "rsi") return `p=${p.rsiPeriod} os=${p.oversold} ob=${p.overbought}`;
-  return `fast=${p.fast} slow=${p.slow}`;
+  switch (name) {
+    case "rsi":
+      return `p=${p.rsiPeriod} os=${p.oversold} ob=${p.overbought}`;
+    case "macd":
+      return `f=${p.fast} s=${p.slow} sig=${p.signal}`;
+    case "bollinger":
+      return `p=${p.bbPeriod} sd=${p.bbStdDev}`;
+    case "stochastic":
+      return `k=${p.stochK} d=${p.stochD} os=${p.oversold} ob=${p.overbought}`;
+    case "donchian":
+      return `p=${p.donchianPeriod}`;
+    case "trendbreak":
+      return `ch=${p.donchianPeriod} tr=${p.trendPeriod}`;
+    default:
+      return `fast=${p.fast} slow=${p.slow}`;
+  }
 }
 
 main().catch((err) => {

@@ -55,9 +55,16 @@ const schema = z.object({
   SYMBOL_STRATEGIES: z.string().default(""),
   FAST_PERIOD: numFromEnv(9),
   SLOW_PERIOD: numFromEnv(21),
+  MACD_SIGNAL: numFromEnv(9),
   RSI_PERIOD: numFromEnv(14),
   RSI_OVERSOLD: numFromEnv(30),
   RSI_OVERBOUGHT: numFromEnv(70),
+  BB_PERIOD: numFromEnv(20),
+  BB_STDDEV: numFromEnv(2),
+  STOCH_K: numFromEnv(14),
+  STOCH_D: numFromEnv(3),
+  DONCHIAN_PERIOD: numFromEnv(20),
+  TREND_PERIOD: numFromEnv(100),
 });
 
 const parsed = schema.parse(process.env);
@@ -105,9 +112,16 @@ export const config = {
   strategyParams: {
     fast: parsed.FAST_PERIOD,
     slow: parsed.SLOW_PERIOD,
+    signal: parsed.MACD_SIGNAL,
     rsiPeriod: parsed.RSI_PERIOD,
     oversold: parsed.RSI_OVERSOLD,
     overbought: parsed.RSI_OVERBOUGHT,
+    bbPeriod: parsed.BB_PERIOD,
+    bbStdDev: parsed.BB_STDDEV,
+    stochK: parsed.STOCH_K,
+    stochD: parsed.STOCH_D,
+    donchianPeriod: parsed.DONCHIAN_PERIOD,
+    trendPeriod: parsed.TREND_PERIOD,
   },
 } as const;
 

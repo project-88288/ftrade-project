@@ -10,6 +10,7 @@
     "backtest": "tsx src/backtest/run.ts",
     "optimize": "tsx src/backtest/optimize-run.ts",
     "traintest": "tsx src/backtest/traintest-run.ts",
+    "walkforward": "tsx src/backtest/walkforward-run.ts",
     "pnl": "tsx src/state/pnl-report.ts",
     "dashboard": "tsx src/dashboard/run.ts",
     "build": "tsc -p tsconfig.build.json",
