@@ -4,18 +4,17 @@ import { logger } from "../utils/logger.js";
 import { isStrategyName, STRATEGY_NAMES, type StrategyParams } from "../strategy/index.js";
 import { fetchHistory, loadCsv } from "./data.js";
 import { buildGrid, rangesFromArgs, type OptimizeMetric } from "./optimize.js";
-import { trainTest } from "./traintest.js";
+import { walkForward } from "./walkforward.js";
 import type { Candle } from "../types/index.js";
-import type { BacktestResult } from "./engine.js";
 
 const VALID_METRICS: OptimizeMetric[] = ["return", "winRate", "trades"];
 
 /**
- * CLI: optimize a strategy on a training slice, then report out-of-sample
- * performance on a held-out test slice.
+ * CLI: rolling walk-forward validation. Re-optimizes on a sliding training window
+ * and reports the chained out-of-sample performance across every fold.
  *
- *   npm run traintest -- --strategy ema --fast 5:15:2 --slow 20:40:5 --train-ratio 0.7
- *   npm run traintest -- --strategy rsi --rsi-period 7:21:7 --metric winRate
+ *   npm run walkforward -- --strategy rsi --folds 5 --rsi-period 7,14,21
+ *   npm run walkforward -- --strategy sma --timeframe 1h --limit 4000 --folds 6
  */
 async function main() {
   const { values } = parseArgs({
@@ -24,7 +23,7 @@ async function main() {
       exchange: { type: "string", default: config.exchangeId },
       symbol: { type: "string", default: config.symbol },
       timeframe: { type: "string", default: config.timeframe },
-      limit: { type: "string", default: "1000" },
+      limit: { type: "string", default: "2000" },
       csv: { type: "string" },
       fast: { type: "string", default: "5:15" },
       slow: { type: "string", default: "20:40:5" },
@@ -43,7 +42,8 @@ async function main() {
       fee: { type: "string", default: "0.001" },
       metric: { type: "string", default: "return" },
       "min-trades": { type: "string", default: "5" },
-      "train-ratio": { type: "string", default: "0.7" },
+      "train-ratio": { type: "string", default: "0.5" },
+      folds: { type: "string", default: "5" },
     },
   });
 
@@ -60,7 +60,6 @@ async function main() {
   }
 
   const ranges = rangesFromArgs(strategyName, values as Record<string, string | undefined>);
-
   const combos = buildGrid(strategyName, ranges);
   if (combos.length === 0) {
     logger.fatal("No valid parameter combinations to test");
@@ -85,12 +84,13 @@ async function main() {
   }
 
   const trainRatio = Number(values["train-ratio"]);
+  const folds = Number(values.folds);
   logger.info(
-    { strategy: strategyName, combos: combos.length, candles: candles.length, trainRatio, metric },
-    "Running train/test validation",
+    { strategy: strategyName, combos: combos.length, candles: candles.length, trainRatio, folds, metric },
+    "Running walk-forward validation",
   );
 
-  const result = trainTest(candles, strategyName, combos, trainRatio, {
+  const result = walkForward(candles, strategyName, combos, trainRatio, folds, {
     backtest: {
       initialCash: Number(values.cash),
       positionUsd: Number(values.size),
@@ -102,54 +102,55 @@ async function main() {
     minTrades: Number(values["min-trades"]),
   });
 
-  console.log(`\n=== Train/Test Validation: ${strategyName.toUpperCase()} ===`);
-  console.log(`Split:          ${(trainRatio * 100).toFixed(0)}% train / ${((1 - trainRatio) * 100).toFixed(0)}% test`);
-  console.log(`Train candles:  ${result.trainCandles}`);
-  console.log(`Test candles:   ${result.testCandles}`);
-  console.log(`Best params:    ${formatParams(strategyName, result.bestParams)}  (chosen by ${metric} in-sample)\n`);
+  console.log(`\n=== Walk-Forward Validation: ${strategyName.toUpperCase()} ===`);
+  console.log(`Rolling window: ${(trainRatio * 100).toFixed(0)}% train, ${result.folds.length} folds (params re-chosen by ${metric} each fold)\n`);
 
-  printSlice("IN-SAMPLE  (train)", result.train);
-  printSlice("OUT-OF-SAMPLE (test)", result.test);
+  console.log(
+    `${"fold".padStart(4)}  ${"best params".padEnd(26)}  ${"train%".padStart(8)}  ${"test%".padStart(8)}  ${"test win%".padStart(9)}  ${"trades".padStart(6)}`,
+  );
+  result.folds.forEach((f, i) => {
+    console.log(
+      `${String(i + 1).padStart(4)}  ${formatParams(strategyName, f.bestParams).padEnd(26)}  ` +
+        `${f.train.totalReturnPct.toFixed(2).padStart(8)}  ${f.test.totalReturnPct.toFixed(2).padStart(8)}  ` +
+        `${f.test.winRatePct.toFixed(1).padStart(9)}  ${String(f.test.trades.length).padStart(6)}`,
+    );
+  });
 
-  const decay = result.train.totalReturnPct - result.test.totalReturnPct;
-  console.log(`\nReturn decay (train - test): ${decay.toFixed(2)} pts`);
-  if (result.test.totalReturnPct <= 0 && result.train.totalReturnPct > 0) {
-    console.log("⚠️  Profitable in-sample but not out-of-sample — likely overfit.");
-  } else if (decay > Math.abs(result.train.totalReturnPct) * 0.5) {
-    console.log("⚠️  Large drop out-of-sample — treat these params with caution.");
+  console.log(`\n--- Aggregate out-of-sample (chained across folds) ---`);
+  console.log(`  compounded return:  ${result.oosReturnPct.toFixed(2)}%`);
+  console.log(`  win rate:           ${result.oosWinRatePct.toFixed(1)}%  (${result.oosTrades} trades)`);
+  console.log(`  profitable folds:   ${result.profitableFolds}/${result.folds.length}`);
+
+  if (result.profitableFolds === result.folds.length && result.oosReturnPct > 0) {
+    console.log("\n✓  Edge held out-of-sample in every fold.");
+  } else if (result.oosReturnPct > 0 && result.profitableFolds >= Math.ceil(result.folds.length / 2)) {
+    console.log("\n~  Positive overall but inconsistent across folds — a weak edge at best.");
   } else {
-    console.log("✓  Out-of-sample performance held up reasonably.");
+    console.log("\n⚠️  Out-of-sample performance did not hold up — likely overfit.");
   }
   console.log("");
-}
-
-function printSlice(label: string, r: BacktestResult) {
-  console.log(`--- ${label} ---`);
-  console.log(`  return:   ${r.totalReturnPct.toFixed(2)}%`);
-  console.log(`  trades:   ${r.trades.length}  (W ${r.wins} / L ${r.losses}, ${r.winRatePct.toFixed(1)}% win)`);
-  console.log(`  max DD:   ${r.maxDrawdownPct.toFixed(2)}%`);
 }
 
 function formatParams(name: string, p: StrategyParams): string {
   switch (name) {
     case "rsi":
-      return `period=${p.rsiPeriod} oversold=${p.oversold} overbought=${p.overbought}`;
+      return `p=${p.rsiPeriod} os=${p.oversold} ob=${p.overbought}`;
     case "macd":
-      return `fast=${p.fast} slow=${p.slow} signal=${p.signal}`;
+      return `f=${p.fast} s=${p.slow} sig=${p.signal}`;
     case "bollinger":
-      return `period=${p.bbPeriod} stdDev=${p.bbStdDev}`;
+      return `p=${p.bbPeriod} sd=${p.bbStdDev}`;
     case "stochastic":
-      return `k=${p.stochK} d=${p.stochD} oversold=${p.oversold} overbought=${p.overbought}`;
+      return `k=${p.stochK} d=${p.stochD} os=${p.oversold} ob=${p.overbought}`;
     case "donchian":
-      return `period=${p.donchianPeriod}`;
+      return `p=${p.donchianPeriod}`;
     case "trendbreak":
-      return `channel=${p.donchianPeriod} trend=${p.trendPeriod}`;
+      return `ch=${p.donchianPeriod} tr=${p.trendPeriod}`;
     default:
       return `fast=${p.fast} slow=${p.slow}`;
   }
 }
 
 main().catch((err) => {
-  logger.fatal({ err }, "Train/test failed");
+  logger.fatal({ err }, "Walk-forward failed");
   process.exit(1);
 });

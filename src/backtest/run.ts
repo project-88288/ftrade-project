@@ -25,9 +25,16 @@ async function main() {
       csv: { type: "string" },
       fast: { type: "string", default: "9" },
       slow: { type: "string", default: "21" },
+      signal: { type: "string", default: "9" },
       "rsi-period": { type: "string", default: "14" },
       oversold: { type: "string", default: "30" },
       overbought: { type: "string", default: "70" },
+      "bb-period": { type: "string", default: "20" },
+      "bb-stddev": { type: "string", default: "2" },
+      "stoch-k": { type: "string", default: "14" },
+      "stoch-d": { type: "string", default: "3" },
+      "donchian-period": { type: "string", default: "20" },
+      "trend-period": { type: "string", default: "100" },
       cash: { type: "string", default: "10000" },
       size: { type: "string", default: String(config.maxPositionUsd) },
       fee: { type: "string", default: "0.001" },
@@ -46,9 +53,16 @@ async function main() {
   const { strategy, warmup } = createStrategy(strategyName, {
     fast: Number(values.fast),
     slow: Number(values.slow),
+    signal: Number(values.signal),
     rsiPeriod: Number(values["rsi-period"]),
     oversold: Number(values.oversold),
     overbought: Number(values.overbought),
+    bbPeriod: Number(values["bb-period"]),
+    bbStdDev: Number(values["bb-stddev"]),
+    stochK: Number(values["stoch-k"]),
+    stochD: Number(values["stoch-d"]),
+    donchianPeriod: Number(values["donchian-period"]),
+    trendPeriod: Number(values["trend-period"]),
   });
 
   let candles: Candle[];

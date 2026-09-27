@@ -55,6 +55,7 @@ function resolveDefaultSpec(): { name: StrategyName; params: StrategyParams } {
   return {
     name,
     params: {
+      ...config.strategyParams,
       fast: num(values.fast, config.strategyParams.fast),
       slow: num(values.slow, config.strategyParams.slow),
       rsiPeriod: num(values["rsi-period"], config.strategyParams.rsiPeriod),

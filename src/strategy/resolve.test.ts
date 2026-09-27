@@ -4,9 +4,16 @@ import { resolveSymbolStrategies, type StrategyParams } from "./index.js";
 const defaultParams: StrategyParams = {
   fast: 9,
   slow: 21,
+  signal: 9,
   rsiPeriod: 14,
   oversold: 30,
   overbought: 70,
+  bbPeriod: 20,
+  bbStdDev: 2,
+  stochK: 14,
+  stochD: 3,
+  donchianPeriod: 20,
+  trendPeriod: 100,
 };
 
 describe("resolveSymbolStrategies", () => {

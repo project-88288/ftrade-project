@@ -50,12 +50,52 @@ export function parseRange(spec: string): number[] {
   });
 }
 
+/**
+ * Build the grid ranges relevant to a strategy from parsed CLI args, using the
+ * shared option names (e.g. --fast, --bb-period). Shared by the optimize and
+ * traintest CLIs so both accept the same flags.
+ */
+export function rangesFromArgs(
+  name: StrategyName,
+  values: Record<string, string | undefined>,
+): GridRanges {
+  const r = (key: string) => parseRange(values[key]!);
+  switch (name) {
+    case "rsi":
+      return { rsiPeriod: r("rsi-period"), oversold: r("oversold"), overbought: r("overbought") };
+    case "macd":
+      return { fast: r("fast"), slow: r("slow"), signal: r("signal") };
+    case "bollinger":
+      return { bbPeriod: r("bb-period"), bbStdDev: r("bb-stddev") };
+    case "stochastic":
+      return {
+        stochK: r("stoch-k"),
+        stochD: r("stoch-d"),
+        oversold: r("oversold"),
+        overbought: r("overbought"),
+      };
+    case "donchian":
+      return { donchianPeriod: r("donchian-period") };
+    case "trendbreak":
+      return { donchianPeriod: r("donchian-period"), trendPeriod: r("trend-period") };
+    default: // sma, ema
+      return { fast: r("fast"), slow: r("slow") };
+  }
+}
+
 export interface GridRanges {
   fast?: number[];
   slow?: number[];
+  signal?: number[];
   rsiPeriod?: number[];
   oversold?: number[];
   overbought?: number[];
+  bbPeriod?: number[];
+  bbStdDev?: number[];
+  stochK?: number[];
+  stochD?: number[];
+  donchianPeriod?: number[];
+  trendPeriod?: number[];
 }
 
 /**
@@ -67,9 +107,16 @@ export function buildGrid(name: StrategyName, ranges: GridRanges): StrategyParam
   const base: StrategyParams = {
     fast: 9,
     slow: 21,
+    signal: 9,
     rsiPeriod: 14,
     oversold: 30,
     overbought: 70,
+    bbPeriod: 20,
+    bbStdDev: 2,
+    stochK: 14,
+    stochD: 3,
+    donchianPeriod: 20,
+    trendPeriod: 100,
   };
 
   if (name === "sma" || name === "ema") {
@@ -79,6 +126,55 @@ export function buildGrid(name: StrategyName, ranges: GridRanges): StrategyParam
       for (const slow of slows) {
         if (fast >= slow) continue;
         combos.push({ ...base, fast, slow });
+      }
+    }
+  } else if (name === "macd") {
+    const fasts = ranges.fast ?? [base.fast];
+    const slows = ranges.slow ?? [base.slow];
+    const signals = ranges.signal ?? [base.signal];
+    for (const fast of fasts) {
+      for (const slow of slows) {
+        if (fast >= slow) continue;
+        for (const signal of signals) {
+          combos.push({ ...base, fast, slow, signal });
+        }
+      }
+    }
+  } else if (name === "bollinger") {
+    const periods = ranges.bbPeriod ?? [base.bbPeriod];
+    const devs = ranges.bbStdDev ?? [base.bbStdDev];
+    for (const bbPeriod of periods) {
+      for (const bbStdDev of devs) {
+        combos.push({ ...base, bbPeriod, bbStdDev });
+      }
+    }
+  } else if (name === "stochastic") {
+    const ks = ranges.stochK ?? [base.stochK];
+    const ds = ranges.stochD ?? [base.stochD];
+    const oversolds = ranges.oversold ?? [base.oversold];
+    const overboughts = ranges.overbought ?? [base.overbought];
+    for (const stochK of ks) {
+      for (const stochD of ds) {
+        for (const oversold of oversolds) {
+          for (const overbought of overboughts) {
+            if (oversold >= overbought) continue;
+            combos.push({ ...base, stochK, stochD, oversold, overbought });
+          }
+        }
+      }
+    }
+  } else if (name === "donchian") {
+    const periods = ranges.donchianPeriod ?? [base.donchianPeriod];
+    for (const donchianPeriod of periods) {
+      combos.push({ ...base, donchianPeriod });
+    }
+  } else if (name === "trendbreak") {
+    const channels = ranges.donchianPeriod ?? [base.donchianPeriod];
+    const trends = ranges.trendPeriod ?? [base.trendPeriod];
+    for (const donchianPeriod of channels) {
+      for (const trendPeriod of trends) {
+        if (trendPeriod <= donchianPeriod) continue;
+        combos.push({ ...base, donchianPeriod, trendPeriod });
       }
     }
   } else {
