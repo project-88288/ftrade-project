@@ -24,6 +24,19 @@ const schema = z.object({
   EXCHANGE_ID: z.string().min(1).default("binance"),
   EXCHANGE_API_KEY: z.string().default(""),
   EXCHANGE_SECRET: z.string().default(""),
+  // Exchange-specific credential fallbacks (used when EXCHANGE_API_KEY is unset).
+  BINANCE_API_KEY: z.string().default(""),
+  BINANCE_SECRET: z.string().default(""),
+  // "spot" or "future" (USDT-margined perpetuals on Binance).
+  MARKET_TYPE: z.enum(["spot", "future"]).default("spot"),
+  // Leverage applied to futures positions (ignored on spot).
+  LEVERAGE: numFromEnv(1),
+  // "isolated" caps a position's loss to its own margin; "cross" backs it with the
+  // whole balance.
+  MARGIN_MODE: z.enum(["isolated", "cross"]).default("isolated"),
+  // Fraction of quote balance used as margin per trade (e.g. 0.20 = 20%). At >0 this
+  // overrides MAX_POSITION_USD: notional = balance * POSITION_PCT * LEVERAGE.
+  POSITION_PCT: numFromEnv(0),
   SYMBOL: z.string().min(1).default("BTC/USDT"),
   // Comma-separated markets for the live bot to trade concurrently. Falls back to
   // SYMBOL when unset.
@@ -84,8 +97,8 @@ if (parsed.SYMBOL_STRATEGIES) {
 
 export const config = {
   exchangeId: parsed.EXCHANGE_ID,
-  apiKey: parsed.EXCHANGE_API_KEY,
-  secret: parsed.EXCHANGE_SECRET,
+  apiKey: parsed.EXCHANGE_API_KEY || parsed.BINANCE_API_KEY,
+  secret: parsed.EXCHANGE_SECRET || parsed.BINANCE_SECRET,
   /** Single default symbol — used by the backtest/optimize CLIs. */
   symbol: parsed.SYMBOL,
   /** Markets the live bot trades concurrently. */
@@ -93,6 +106,10 @@ export const config = {
   timeframe: parsed.TIMEFRAME,
   sandbox: parsed.SANDBOX,
   dryRun: parsed.DRY_RUN,
+  marketType: parsed.MARKET_TYPE,
+  leverage: parsed.LEVERAGE,
+  marginMode: parsed.MARGIN_MODE,
+  positionPct: parsed.POSITION_PCT,
   maxPositionUsd: parsed.MAX_POSITION_USD,
   stopLossPct: parsed.STOP_LOSS_PCT,
   takeProfitPct: parsed.TAKE_PROFIT_PCT,

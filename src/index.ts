@@ -102,7 +102,18 @@ async function tradeSymbol(
   logger.debug({ symbol, strategy: spec.strategy.name, signal, price }, "Evaluated strategy");
 
   if (!positions.has(symbol) && signal.side !== "hold") {
-    const amount = risk.positionSize(price);
+    let balance: number | undefined;
+    if (config.positionPct > 0) {
+      try {
+        balance = await client.fetchQuoteBalance(symbol.split("/")[1]!);
+      } catch (err) {
+        logger.warn(
+          { symbol, err: (err as Error).message },
+          "Could not fetch balance for % sizing; falling back to MAX_POSITION_USD",
+        );
+      }
+    }
+    const amount = risk.positionSize(price, balance);
     if (amount > 0) {
       const fill = await client.createOrder(symbol, signal.side, amount, price);
       const position: Position = {
@@ -177,6 +188,10 @@ async function main() {
       ),
       sandbox: config.sandbox,
       dryRun: config.dryRun,
+      marketType: config.marketType,
+      leverage: config.marketType === "future" ? config.leverage : undefined,
+      marginMode: config.marketType === "future" ? config.marginMode : undefined,
+      positionPct: config.positionPct > 0 ? config.positionPct : undefined,
     },
     "Starting ftrade bot",
   );
@@ -189,6 +204,16 @@ async function main() {
     tradeLog: new TradeLog(config.tradeLogFile),
     notifier: createNotifier(),
   };
+
+  // Configure futures leverage / margin mode per market. Needs live credentials;
+  // in dry-run no orders are placed so the exchange-side setting is irrelevant.
+  if (config.marketType === "future" && !config.dryRun && config.apiKey) {
+    try {
+      await deps.client.configureMarkets([...strategies.keys()]);
+    } catch (err) {
+      logger.error({ err }, "Failed to configure futures markets");
+    }
+  }
 
   // Resume positions left open by a previous run.
   const positions = await deps.store.load();

@@ -1,0 +1,54 @@
+# Fly.io config for the ftrade trading bot (bot only — no public service).
+#
+# One machine, one volume for persisted state. Do NOT scale to >1 machine: a
+# second instance would trade the same account concurrently.
+#
+# Secrets (never put these in this file — set them with `fly secrets set`):
+#   BINANCE_API_KEY, BINANCE_SECRET
+#
+# See fly-runbook below (chat) for the full deploy sequence.
+
+app = "ftrade-bot"          # change to your own globally-unique app name
+primary_region = "sin"      # Singapore — Binance-friendly (avoid US regions)
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Non-secret runtime config. API keys are injected separately via `fly secrets`.
+[env]
+  # Market / strategy
+  MARKET_TYPE = "future"
+  LEVERAGE = "10"
+  MARGIN_MODE = "isolated"
+  POSITION_PCT = "0.20"
+  STRATEGY = "donchian"
+  DONCHIAN_PERIOD = "40"
+  SYMBOL = "BTC/USDT"
+  SYMBOLS = "BTC/USDT"
+  TIMEFRAME = "4h"
+  SANDBOX = "false"
+  DRY_RUN = "false"
+
+  # Risk
+  MAX_POSITION_USD = "100"
+  STOP_LOSS_PCT = "2"
+  TAKE_PROFIT_PCT = "4"
+  FEE_RATE = "0.001"
+
+  # Ops
+  POLL_INTERVAL_SEC = "15"
+  RECONCILE = "false"       # reconciler is spot-only; keep off for futures
+  LOG_LEVEL = "info"
+  STATE_FILE = "/app/data/state.json"
+  TRADE_LOG_FILE = "/app/data/trades.jsonl"
+
+# Persist position state + trade log across deploys/restarts.
+[mounts]
+  source = "ftrade_data"
+  destination = "/app/data"
+
+# The bot is a background worker with no inbound traffic, so there is no
+# [http_service]. Keep exactly one machine running.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
