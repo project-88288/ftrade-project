@@ -8,8 +8,8 @@
 #
 # See fly-runbook below (chat) for the full deploy sequence.
 
-app = "ftrade-bot"          # change to your own globally-unique app name
-primary_region = "sin"      # Singapore — Binance-friendly (avoid US regions)
+app = "ftrade-project"
+primary_region = "sin"     # Singapore — Binance-friendly (avoid US regions)
 
 [build]
   dockerfile = "Dockerfile"
