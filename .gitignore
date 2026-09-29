@@ -12,3 +12,7 @@ state.json
 *.state.json
 trades.jsonl
 *.trades.jsonl
+
+# Local helper scripts (read keys from .env)
+watch-position.mjs
+check-binance.mjs
