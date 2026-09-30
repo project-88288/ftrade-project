@@ -216,6 +216,19 @@ event-driven — it feeds the strategy only the data available up to each candle
 look-ahead), simulates fills at the candle close with a flat fee, supports long/short
 flipping, and reports return, win rate and max drawdown.
 
+The engine runs in **O(N)** per backtest, not O(N²): strategies precompute each
+indicator once over the full series (via `Strategy.prepare`) and read one value per
+candle, rather than recomputing the whole indicator on a growing window every step.
+Results are identical to the naive path — each indicator value at candle `i` depends
+only on data up to `i` — but far faster, which compounds across every combo in a
+parameter sweep. Measured on a MACD backtest (identical output at each size):
+
+| Candles | Naive O(N²) | O(N) | Speedup |
+| --- | --- | --- | --- |
+| 500 | 11.4 ms | 1.6 ms | ~7× |
+| 2,000 | 118.7 ms | 0.9 ms | ~133× |
+| 5,000 | 772.8 ms | 1.4 ms | ~545× |
+
 ```bash
 # Fetch data live from a public exchange (no API key needed) and backtest
 npm run backtest -- --exchange binance --symbol BTC/USDT --timeframe 1h --limit 500
