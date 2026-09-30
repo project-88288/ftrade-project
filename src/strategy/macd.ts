@@ -1,4 +1,4 @@
-import type { Candle, Signal, Strategy } from "../types/index.js";
+import type { Candle, Signal, SignalAt, Strategy } from "../types/index.js";
 import { macd } from "./indicators.js";
 
 /**
@@ -22,28 +22,33 @@ export class MacdStrategy implements Strategy {
   }
 
   evaluate(candles: Candle[]): Signal {
+    return this.prepare(candles)(candles.length - 1);
+  }
+
+  prepare(candles: Candle[]): SignalAt {
     const closes = candles.map((c) => c.close);
     const { macd: line, signal } = macd(closes, this.fastPeriod, this.slowPeriod, this.signalPeriod);
 
-    const i = closes.length - 1;
-    const macdNow = line[i];
-    const macdPrev = line[i - 1];
-    const sigNow = signal[i];
-    const sigPrev = signal[i - 1];
+    return (i) => {
+      const macdNow = line[i];
+      const macdPrev = line[i - 1];
+      const sigNow = signal[i];
+      const sigPrev = signal[i - 1];
 
-    if (macdNow == null || macdPrev == null || sigNow == null || sigPrev == null) {
-      return { side: "hold", strength: 0, reason: "Not enough data" };
-    }
+      if (macdNow == null || macdPrev == null || sigNow == null || sigPrev == null) {
+        return { side: "hold", strength: 0, reason: "Not enough data" };
+      }
 
-    const crossedUp = macdPrev <= sigPrev && macdNow > sigNow;
-    const crossedDown = macdPrev >= sigPrev && macdNow < sigNow;
+      const crossedUp = macdPrev <= sigPrev && macdNow > sigNow;
+      const crossedDown = macdPrev >= sigPrev && macdNow < sigNow;
 
-    if (crossedUp) {
-      return { side: "buy", strength: 1, reason: "MACD crossed above signal line" };
-    }
-    if (crossedDown) {
-      return { side: "sell", strength: 1, reason: "MACD crossed below signal line" };
-    }
-    return { side: "hold", strength: 0, reason: "No crossover" };
+      if (crossedUp) {
+        return { side: "buy", strength: 1, reason: "MACD crossed above signal line" };
+      }
+      if (crossedDown) {
+        return { side: "sell", strength: 1, reason: "MACD crossed below signal line" };
+      }
+      return { side: "hold", strength: 0, reason: "No crossover" };
+    };
   }
 }

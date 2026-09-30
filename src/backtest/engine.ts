@@ -1,4 +1,4 @@
-import type { Candle, Side, Strategy } from "../types/index.js";
+import type { Candle, Side, SignalAt, Strategy } from "../types/index.js";
 
 export interface BacktestOptions {
   /** Starting cash in quote currency (e.g. USDT). */
@@ -62,6 +62,12 @@ export function backtest(
   let peakEquity = opts.initialCash;
   let maxDrawdownPct = 0;
 
+  // Prefer the strategy's precomputed path (indicators computed once over the whole
+  // series, O(N)); otherwise fall back to re-evaluating each growing prefix (O(N²)).
+  const evalAt: SignalAt = strategy.prepare
+    ? strategy.prepare(candles)
+    : (i) => strategy.evaluate(candles.slice(0, i + 1));
+
   // Cash tracks realised equity (initialCash + sum of closed PnL). While a
   // position is open, equity is cash plus the unrealised move.
   const equityAt = (price: number): number => {
@@ -99,7 +105,6 @@ export function backtest(
   for (let i = opts.warmup; i < candles.length; i++) {
     const candle = candles[i]!;
     const price = candle.close;
-    const window = candles.slice(0, i + 1);
 
     // Check SL/TP on any open position first.
     if (position && (opts.stopLossPct != null || opts.takeProfitPct != null)) {
@@ -112,7 +117,7 @@ export function backtest(
       }
     }
 
-    const signal = strategy.evaluate(window);
+    const signal = evalAt(i);
 
     if (position) {
       // Exit when the strategy flips against the position.

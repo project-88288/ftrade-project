@@ -1,4 +1,4 @@
-import type { Candle, Signal, Strategy } from "../types/index.js";
+import type { Candle, Signal, SignalAt, Strategy } from "../types/index.js";
 import { stochastic } from "./indicators.js";
 
 /**
@@ -22,30 +22,35 @@ export class StochasticStrategy implements Strategy {
   }
 
   evaluate(candles: Candle[]): Signal {
+    return this.prepare(candles)(candles.length - 1);
+  }
+
+  prepare(candles: Candle[]): SignalAt {
     const highs = candles.map((c) => c.high);
     const lows = candles.map((c) => c.low);
     const closes = candles.map((c) => c.close);
     const { k, d } = stochastic(highs, lows, closes, this.kPeriod, this.dPeriod);
 
-    const i = closes.length - 1;
-    const kNow = k[i];
-    const kPrev = k[i - 1];
-    const dNow = d[i];
-    const dPrev = d[i - 1];
+    return (i) => {
+      const kNow = k[i];
+      const kPrev = k[i - 1];
+      const dNow = d[i];
+      const dPrev = d[i - 1];
 
-    if (kNow == null || kPrev == null || dNow == null || dPrev == null) {
-      return { side: "hold", strength: 0, reason: "Not enough data" };
-    }
+      if (kNow == null || kPrev == null || dNow == null || dPrev == null) {
+        return { side: "hold", strength: 0, reason: "Not enough data" };
+      }
 
-    const crossedUp = kPrev <= dPrev && kNow > dNow;
-    const crossedDown = kPrev >= dPrev && kNow < dNow;
+      const crossedUp = kPrev <= dPrev && kNow > dNow;
+      const crossedDown = kPrev >= dPrev && kNow < dNow;
 
-    if (crossedUp && dPrev <= this.oversold) {
-      return { side: "buy", strength: 1, reason: `%K crossed above %D in oversold (${this.oversold})` };
-    }
-    if (crossedDown && dPrev >= this.overbought) {
-      return { side: "sell", strength: 1, reason: `%K crossed below %D in overbought (${this.overbought})` };
-    }
-    return { side: "hold", strength: 0, reason: `Stoch %K ${kNow.toFixed(1)}` };
+      if (crossedUp && dPrev <= this.oversold) {
+        return { side: "buy", strength: 1, reason: `%K crossed above %D in oversold (${this.oversold})` };
+      }
+      if (crossedDown && dPrev >= this.overbought) {
+        return { side: "sell", strength: 1, reason: `%K crossed below %D in overbought (${this.overbought})` };
+      }
+      return { side: "hold", strength: 0, reason: `Stoch %K ${kNow.toFixed(1)}` };
+    };
   }
 }

@@ -1,4 +1,4 @@
-import type { Candle, Signal, Strategy } from "../types/index.js";
+import type { Candle, Signal, SignalAt, Strategy } from "../types/index.js";
 import { ema } from "./indicators.js";
 
 /**
@@ -19,29 +19,34 @@ export class EmaCrossoverStrategy implements Strategy {
   }
 
   evaluate(candles: Candle[]): Signal {
+    return this.prepare(candles)(candles.length - 1);
+  }
+
+  prepare(candles: Candle[]): SignalAt {
     const closes = candles.map((c) => c.close);
     const fast = ema(closes, this.fastPeriod);
     const slow = ema(closes, this.slowPeriod);
 
-    const i = closes.length - 1;
-    const fastNow = fast[i];
-    const slowNow = slow[i];
-    const fastPrev = fast[i - 1];
-    const slowPrev = slow[i - 1];
+    return (i) => {
+      const fastNow = fast[i];
+      const slowNow = slow[i];
+      const fastPrev = fast[i - 1];
+      const slowPrev = slow[i - 1];
 
-    if (fastNow == null || slowNow == null || fastPrev == null || slowPrev == null) {
-      return { side: "hold", strength: 0, reason: "Not enough data" };
-    }
+      if (fastNow == null || slowNow == null || fastPrev == null || slowPrev == null) {
+        return { side: "hold", strength: 0, reason: "Not enough data" };
+      }
 
-    const crossedUp = fastPrev <= slowPrev && fastNow > slowNow;
-    const crossedDown = fastPrev >= slowPrev && fastNow < slowNow;
+      const crossedUp = fastPrev <= slowPrev && fastNow > slowNow;
+      const crossedDown = fastPrev >= slowPrev && fastNow < slowNow;
 
-    if (crossedUp) {
-      return { side: "buy", strength: 1, reason: "Fast EMA crossed above slow EMA" };
-    }
-    if (crossedDown) {
-      return { side: "sell", strength: 1, reason: "Fast EMA crossed below slow EMA" };
-    }
-    return { side: "hold", strength: 0, reason: "No crossover" };
+      if (crossedUp) {
+        return { side: "buy", strength: 1, reason: "Fast EMA crossed above slow EMA" };
+      }
+      if (crossedDown) {
+        return { side: "sell", strength: 1, reason: "Fast EMA crossed below slow EMA" };
+      }
+      return { side: "hold", strength: 0, reason: "No crossover" };
+    };
   }
 }

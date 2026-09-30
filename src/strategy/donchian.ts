@@ -1,4 +1,4 @@
-import type { Candle, Signal, Strategy } from "../types/index.js";
+import type { Candle, Signal, SignalAt, Strategy } from "../types/index.js";
 import { donchian } from "./indicators.js";
 
 /**
@@ -15,26 +15,31 @@ export class DonchianStrategy implements Strategy {
   }
 
   evaluate(candles: Candle[]): Signal {
+    return this.prepare(candles)(candles.length - 1);
+  }
+
+  prepare(candles: Candle[]): SignalAt {
     const highs = candles.map((c) => c.high);
     const lows = candles.map((c) => c.low);
     const closes = candles.map((c) => c.close);
     const { upper, lower } = donchian(highs, lows, this.period);
 
-    const i = closes.length - 1;
-    const close = closes[i];
-    const up = upper[i];
-    const lo = lower[i];
+    return (i) => {
+      const close = closes[i];
+      const up = upper[i];
+      const lo = lower[i];
 
-    if (close == null || up == null || lo == null) {
-      return { side: "hold", strength: 0, reason: "Not enough data" };
-    }
+      if (close == null || up == null || lo == null) {
+        return { side: "hold", strength: 0, reason: "Not enough data" };
+      }
 
-    if (close > up) {
-      return { side: "buy", strength: 1, reason: `Broke above ${this.period}-period high` };
-    }
-    if (close < lo) {
-      return { side: "sell", strength: 1, reason: `Broke below ${this.period}-period low` };
-    }
-    return { side: "hold", strength: 0, reason: "Inside the channel" };
+      if (close > up) {
+        return { side: "buy", strength: 1, reason: `Broke above ${this.period}-period high` };
+      }
+      if (close < lo) {
+        return { side: "sell", strength: 1, reason: `Broke below ${this.period}-period low` };
+      }
+      return { side: "hold", strength: 0, reason: "Inside the channel" };
+    };
   }
 }
