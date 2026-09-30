@@ -1,4 +1,4 @@
-import type { Candle, Signal, Strategy } from "../types/index.js";
+import type { Candle, Signal, SignalAt, Strategy } from "../types/index.js";
 import { donchian, sma } from "./indicators.js";
 
 /**
@@ -24,30 +24,35 @@ export class TrendBreakStrategy implements Strategy {
   }
 
   evaluate(candles: Candle[]): Signal {
+    return this.prepare(candles)(candles.length - 1);
+  }
+
+  prepare(candles: Candle[]): SignalAt {
     const highs = candles.map((c) => c.high);
     const lows = candles.map((c) => c.low);
     const closes = candles.map((c) => c.close);
     const { upper, lower } = donchian(highs, lows, this.channelPeriod);
     const trend = sma(closes, this.trendPeriod);
 
-    const i = closes.length - 1;
-    const close = closes[i];
-    const up = upper[i];
-    const lo = lower[i];
-    const t = trend[i];
+    return (i) => {
+      const close = closes[i];
+      const up = upper[i];
+      const lo = lower[i];
+      const t = trend[i];
 
-    if (close == null || up == null || lo == null || t == null) {
-      return { side: "hold", strength: 0, reason: "Not enough data" };
-    }
+      if (close == null || up == null || lo == null || t == null) {
+        return { side: "hold", strength: 0, reason: "Not enough data" };
+      }
 
-    // Breakout up, but only in an uptrend.
-    if (close > up && close > t) {
-      return { side: "buy", strength: 1, reason: `Breakout above ${this.channelPeriod}-high in uptrend` };
-    }
-    // Breakdown, but only in a downtrend.
-    if (close < lo && close < t) {
-      return { side: "sell", strength: 1, reason: `Breakdown below ${this.channelPeriod}-low in downtrend` };
-    }
-    return { side: "hold", strength: 0, reason: "No trend-aligned breakout" };
+      // Breakout up, but only in an uptrend.
+      if (close > up && close > t) {
+        return { side: "buy", strength: 1, reason: `Breakout above ${this.channelPeriod}-high in uptrend` };
+      }
+      // Breakdown, but only in a downtrend.
+      if (close < lo && close < t) {
+        return { side: "sell", strength: 1, reason: `Breakdown below ${this.channelPeriod}-low in downtrend` };
+      }
+      return { side: "hold", strength: 0, reason: "No trend-aligned breakout" };
+    };
   }
 }

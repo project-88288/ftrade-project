@@ -1,4 +1,4 @@
-import type { Candle, Signal, Strategy } from "../types/index.js";
+import type { Candle, Signal, SignalAt, Strategy } from "../types/index.js";
 import { bollingerBands } from "./indicators.js";
 
 /**
@@ -19,36 +19,41 @@ export class BollingerStrategy implements Strategy {
   }
 
   evaluate(candles: Candle[]): Signal {
+    return this.prepare(candles)(candles.length - 1);
+  }
+
+  prepare(candles: Candle[]): SignalAt {
     const closes = candles.map((c) => c.close);
     const { upper, lower } = bollingerBands(closes, this.period, this.stdDev);
 
-    const i = closes.length - 1;
-    const now = closes[i];
-    const prev = closes[i - 1];
-    const upNow = upper[i];
-    const upPrev = upper[i - 1];
-    const loNow = lower[i];
-    const loPrev = lower[i - 1];
+    return (i) => {
+      const now = closes[i];
+      const prev = closes[i - 1];
+      const upNow = upper[i];
+      const upPrev = upper[i - 1];
+      const loNow = lower[i];
+      const loPrev = lower[i - 1];
 
-    if (
-      now == null ||
-      prev == null ||
-      upNow == null ||
-      upPrev == null ||
-      loNow == null ||
-      loPrev == null
-    ) {
-      return { side: "hold", strength: 0, reason: "Not enough data" };
-    }
+      if (
+        now == null ||
+        prev == null ||
+        upNow == null ||
+        upPrev == null ||
+        loNow == null ||
+        loPrev == null
+      ) {
+        return { side: "hold", strength: 0, reason: "Not enough data" };
+      }
 
-    // Price re-enters from below the lower band → bounce → buy.
-    if (prev <= loPrev && now > loNow) {
-      return { side: "buy", strength: 1, reason: "Price reclaimed the lower band" };
-    }
-    // Price re-enters from above the upper band → fade → sell.
-    if (prev >= upPrev && now < upNow) {
-      return { side: "sell", strength: 1, reason: "Price fell back below the upper band" };
-    }
-    return { side: "hold", strength: 0, reason: "Inside the bands" };
+      // Price re-enters from below the lower band → bounce → buy.
+      if (prev <= loPrev && now > loNow) {
+        return { side: "buy", strength: 1, reason: "Price reclaimed the lower band" };
+      }
+      // Price re-enters from above the upper band → fade → sell.
+      if (prev >= upPrev && now < upNow) {
+        return { side: "sell", strength: 1, reason: "Price fell back below the upper band" };
+      }
+      return { side: "hold", strength: 0, reason: "Inside the bands" };
+    };
   }
 }

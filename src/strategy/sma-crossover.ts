@@ -1,4 +1,5 @@
-import type { Candle, Signal, Strategy } from "../types/index.js";
+import type { Candle, Signal, SignalAt, Strategy } from "../types/index.js";
+import { sma } from "./indicators.js";
 
 /**
  * Simple moving-average crossover strategy. When the fast SMA crosses above the
@@ -18,36 +19,35 @@ export class SmaCrossoverStrategy implements Strategy {
     this.name = `SMA(${fastPeriod}/${slowPeriod})`;
   }
 
-  private sma(values: number[], period: number, offset = 0): number | null {
-    const end = values.length - offset;
-    const start = end - period;
-    if (start < 0) return null;
-    let sum = 0;
-    for (let i = start; i < end; i++) sum += values[i]!;
-    return sum / period;
+  evaluate(candles: Candle[]): Signal {
+    return this.prepare(candles)(candles.length - 1);
   }
 
-  evaluate(candles: Candle[]): Signal {
+  prepare(candles: Candle[]): SignalAt {
     const closes = candles.map((c) => c.close);
+    const fast = sma(closes, this.fastPeriod);
+    const slow = sma(closes, this.slowPeriod);
 
-    const fastNow = this.sma(closes, this.fastPeriod);
-    const slowNow = this.sma(closes, this.slowPeriod);
-    const fastPrev = this.sma(closes, this.fastPeriod, 1);
-    const slowPrev = this.sma(closes, this.slowPeriod, 1);
+    return (i) => {
+      const fastNow = fast[i];
+      const slowNow = slow[i];
+      const fastPrev = fast[i - 1];
+      const slowPrev = slow[i - 1];
 
-    if (fastNow == null || slowNow == null || fastPrev == null || slowPrev == null) {
-      return { side: "hold", strength: 0, reason: "Not enough data" };
-    }
+      if (fastNow == null || slowNow == null || fastPrev == null || slowPrev == null) {
+        return { side: "hold", strength: 0, reason: "Not enough data" };
+      }
 
-    const crossedUp = fastPrev <= slowPrev && fastNow > slowNow;
-    const crossedDown = fastPrev >= slowPrev && fastNow < slowNow;
+      const crossedUp = fastPrev <= slowPrev && fastNow > slowNow;
+      const crossedDown = fastPrev >= slowPrev && fastNow < slowNow;
 
-    if (crossedUp) {
-      return { side: "buy", strength: 1, reason: "Fast SMA crossed above slow SMA" };
-    }
-    if (crossedDown) {
-      return { side: "sell", strength: 1, reason: "Fast SMA crossed below slow SMA" };
-    }
-    return { side: "hold", strength: 0, reason: "No crossover" };
+      if (crossedUp) {
+        return { side: "buy", strength: 1, reason: "Fast SMA crossed above slow SMA" };
+      }
+      if (crossedDown) {
+        return { side: "sell", strength: 1, reason: "Fast SMA crossed below slow SMA" };
+      }
+      return { side: "hold", strength: 0, reason: "No crossover" };
+    };
   }
 }

@@ -26,10 +26,24 @@ export interface Position {
   entryFee: number;
 }
 
+/**
+ * Yields the signal at candle index `i`, using only data up to and including `i`
+ * (no look-ahead). Returned by `Strategy.prepare` for fast backtesting.
+ */
+export type SignalAt = (i: number) => Signal;
+
 /** A trading strategy evaluates recent candles and emits a signal. */
 export interface Strategy {
   readonly name: string;
   evaluate(candles: Candle[]): Signal;
+  /**
+   * Optional fast path for backtesting. Precompute indicators once over the full
+   * candle series and return a function giving the signal at each index using only
+   * data up to that index. Results are identical to calling `evaluate` on every
+   * growing prefix, but the whole backtest is O(N) instead of O(N²) — the engine
+   * uses it when present and falls back to per-candle `evaluate` otherwise.
+   */
+  prepare?(candles: Candle[]): SignalAt;
 }
 
 /** Per-symbol strategy override; unset fields fall back to the global config. */
