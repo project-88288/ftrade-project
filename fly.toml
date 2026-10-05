@@ -33,7 +33,7 @@ primary_region = "sin"     # Singapore — Binance-friendly (avoid US regions)
   MAX_POSITION_USD = "100"
   STOP_LOSS_PCT = "2"          # initial stop; trailing stop takes over once in profit
   TAKE_PROFIT_PCT = "0"        # disabled — let the trailing stop run winners
-  TRAILING_STOP_PCT = "2"      # exit on a 2% retrace from the peak since entry
+  TRAILING_STOP_PCT = "5"      # exit on a 5% retrace from the peak (2% was too tight; see sweep) since entry
   FEE_RATE = "0.001"
 
   # Ops
