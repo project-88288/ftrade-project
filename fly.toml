@@ -39,7 +39,7 @@ primary_region = "sin"     # Singapore — Binance-friendly (avoid US regions)
   # Ops
   POLL_INTERVAL_SEC = "15"
   RECONCILE = "false"       # reconciler is spot-only; keep off for futures
-  LOG_LEVEL = "debug"
+  LOG_LEVEL = "info"
   STATE_FILE = "/app/data/state.json"
   TRADE_LOG_FILE = "/app/data/trades.jsonl"
 
