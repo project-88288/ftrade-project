@@ -47,6 +47,9 @@ const schema = z.object({
   MAX_POSITION_USD: numFromEnv(100),
   STOP_LOSS_PCT: numFromEnv(2),
   TAKE_PROFIT_PCT: numFromEnv(4),
+  // Trailing stop as a % retracement from the best price seen since entry. The
+  // stop ratchets toward profit and never loosens; 0 disables it.
+  TRAILING_STOP_PCT: numFromEnv(0),
   // Only used to estimate fees for DRY_RUN orders; real orders report actual fees.
   FEE_RATE: numFromEnv(0.001),
   LOG_LEVEL: z.string().default("info"),
@@ -113,6 +116,7 @@ export const config = {
   maxPositionUsd: parsed.MAX_POSITION_USD,
   stopLossPct: parsed.STOP_LOSS_PCT,
   takeProfitPct: parsed.TAKE_PROFIT_PCT,
+  trailingStopPct: parsed.TRAILING_STOP_PCT,
   feeRate: parsed.FEE_RATE,
   logLevel: parsed.LOG_LEVEL,
   pollIntervalSec: parsed.POLL_INTERVAL_SEC,

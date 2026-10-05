@@ -31,14 +31,15 @@ primary_region = "sin"     # Singapore — Binance-friendly (avoid US regions)
 
   # Risk
   MAX_POSITION_USD = "100"
-  STOP_LOSS_PCT = "2"
-  TAKE_PROFIT_PCT = "4"
+  STOP_LOSS_PCT = "2"          # initial stop; trailing stop takes over once in profit
+  TAKE_PROFIT_PCT = "0"        # disabled — let the trailing stop run winners
+  TRAILING_STOP_PCT = "2"      # exit on a 2% retrace from the peak since entry
   FEE_RATE = "0.001"
 
   # Ops
   POLL_INTERVAL_SEC = "15"
   RECONCILE = "false"       # reconciler is spot-only; keep off for futures
-  LOG_LEVEL = "info"
+  LOG_LEVEL = "debug"
   STATE_FILE = "/app/data/state.json"
   TRADE_LOG_FILE = "/app/data/trades.jsonl"
 

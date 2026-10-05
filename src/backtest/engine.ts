@@ -9,9 +9,14 @@ export interface BacktestOptions {
   feeRate: number;
   /** Minimum candles the strategy needs before it can be evaluated. */
   warmup: number;
-  /** Optional stop-loss / take-profit as percentages. */
+  /** Optional stop-loss / take-profit as percentages (<= 0 disables). */
   stopLossPct?: number;
   takeProfitPct?: number;
+  /**
+   * Optional trailing stop as a % retracement from the best price seen since entry
+   * (<= 0 disables). Ratchets toward profit and never loosens.
+   */
+  trailingStopPct?: number;
 }
 
 export interface Trade {
@@ -43,6 +48,8 @@ interface OpenPosition {
   entryPrice: number;
   amount: number;
   entryTime: number;
+  /** Best close seen in the position's favour since entry; drives the trailing stop. */
+  peak: number;
 }
 
 /**
@@ -106,14 +113,31 @@ export function backtest(
     const candle = candles[i]!;
     const price = candle.close;
 
-    // Check SL/TP on any open position first.
-    if (position && (opts.stopLossPct != null || opts.takeProfitPct != null)) {
+    // Check stops on any open position first (evaluated on the close, matching the
+    // live bot's per-poll price). SL/TP/trailing with a value <= 0 are disabled.
+    if (position) {
+      position.peak =
+        position.side === "buy"
+          ? Math.max(position.peak, price)
+          : Math.min(position.peak, price);
+
       const change = (price - position.entryPrice) / position.entryPrice;
       const move = (position.side === "buy" ? change : -change) * 100;
-      if (opts.stopLossPct != null && move <= -opts.stopLossPct) {
+      const retrace =
+        position.side === "buy"
+          ? (position.peak - price) / position.peak
+          : (price - position.peak) / position.peak;
+
+      if (opts.stopLossPct != null && opts.stopLossPct > 0 && move <= -opts.stopLossPct) {
         close(price, candle.timestamp, "stop-loss");
-      } else if (opts.takeProfitPct != null && move >= opts.takeProfitPct) {
+      } else if (opts.takeProfitPct != null && opts.takeProfitPct > 0 && move >= opts.takeProfitPct) {
         close(price, candle.timestamp, "take-profit");
+      } else if (
+        opts.trailingStopPct != null &&
+        opts.trailingStopPct > 0 &&
+        retrace * 100 >= opts.trailingStopPct
+      ) {
+        close(price, candle.timestamp, "trailing-stop");
       }
     }
 
@@ -134,6 +158,7 @@ export function backtest(
         entryPrice: price,
         amount,
         entryTime: candle.timestamp,
+        peak: price,
       };
     }
 

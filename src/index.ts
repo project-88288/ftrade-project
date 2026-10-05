@@ -79,23 +79,31 @@ async function tradeSymbol(
   const candles = await client.fetchCandles(symbol, candleLimit);
   const price = await client.fetchPrice(symbol);
 
-  // Manage an open position first (stop-loss / take-profit).
+  // Manage an open position first (stop-loss / take-profit / trailing stop).
   const open = positions.get(symbol);
-  if (open && risk.shouldExit(open, price)) {
-    const side = risk.exitSide(open);
-    const fill = await client.createOrder(symbol, side, open.amount, price);
-    const trade = closeTrade(open, fill.price, "stop-loss/take-profit", fill.feeQuote);
-    await tradeLog.append(trade);
-    positions.delete(symbol);
-    await store.save(positions);
-    logger.info(
-      { symbol, price: fill.price, entry: open.entryPrice, pnl: trade.pnl, fees: trade.fees },
-      "Closed position (SL/TP)",
-    );
-    await notifier.send(
-      `🔴 Closed ${open.side.toUpperCase()} ${symbol} @ ${fill.price}\n` +
-        `PnL: ${trade.pnl.toFixed(2)} (${trade.pnlPct.toFixed(2)}%), fees ${trade.fees.toFixed(2)} — ${config.dryRun ? "DRY_RUN" : "LIVE"}`,
-    );
+  if (open) {
+    // Ratchet the trailing stop toward the latest price before deciding on an exit.
+    const peakMoved = risk.trackPeak(open, price);
+    const reason = risk.exitReason(open, price);
+    if (reason) {
+      const side = risk.exitSide(open);
+      const fill = await client.createOrder(symbol, side, open.amount, price);
+      const trade = closeTrade(open, fill.price, reason, fill.feeQuote);
+      await tradeLog.append(trade);
+      positions.delete(symbol);
+      await store.save(positions);
+      logger.info(
+        { symbol, reason, price: fill.price, entry: open.entryPrice, pnl: trade.pnl, fees: trade.fees },
+        "Closed position",
+      );
+      await notifier.send(
+        `🔴 Closed ${open.side.toUpperCase()} ${symbol} @ ${fill.price} (${reason})\n` +
+          `PnL: ${trade.pnl.toFixed(2)} (${trade.pnlPct.toFixed(2)}%), fees ${trade.fees.toFixed(2)} — ${config.dryRun ? "DRY_RUN" : "LIVE"}`,
+      );
+    } else if (peakMoved) {
+      // No exit, but the trailing stop tightened — persist it so a restart keeps it.
+      await store.save(positions);
+    }
   }
 
   const signal = spec.strategy.evaluate(candles);
@@ -123,6 +131,7 @@ async function tradeSymbol(
         amount: fill.amount,
         openedAt: Date.now(),
         entryFee: fill.feeQuote,
+        peakPrice: fill.price,
       };
       positions.set(symbol, position);
       await store.save(positions);

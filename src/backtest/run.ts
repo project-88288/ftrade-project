@@ -91,6 +91,7 @@ async function main() {
     warmup,
     stopLossPct: config.stopLossPct,
     takeProfitPct: config.takeProfitPct,
+    trailingStopPct: config.trailingStopPct,
   });
 
   const from = candles[0]?.timestamp;
