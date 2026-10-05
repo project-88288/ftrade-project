@@ -24,6 +24,11 @@ export interface Position {
   openedAt: number;
   /** Fee paid to open the position, in quote currency. */
   entryFee: number;
+  /**
+   * Best price seen in the position's favour since entry (highest for a long,
+   * lowest for a short). Drives the trailing stop; defaults to `entryPrice`.
+   */
+  peakPrice?: number;
 }
 
 /**

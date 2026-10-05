@@ -21,12 +21,42 @@ export class RiskManager {
     return config.maxPositionUsd / price;
   }
 
-  /** Returns true if an open position should be closed based on SL/TP. */
-  shouldExit(position: Position, currentPrice: number): boolean {
+  /**
+   * Advance the position's peak (best price seen in its favour) toward the latest
+   * price. Mutates `position.peakPrice` and returns true when it moves, so the
+   * caller can persist the tightened trailing stop. Call before `exitReason`.
+   */
+  trackPeak(position: Position, currentPrice: number): boolean {
+    const prev = position.peakPrice ?? position.entryPrice;
+    const next =
+      position.side === "buy" ? Math.max(prev, currentPrice) : Math.min(prev, currentPrice);
+    if (next !== position.peakPrice) {
+      position.peakPrice = next;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Reason to close the position now, or null to hold. Checks the fixed stop-loss,
+   * the optional take-profit (disabled at <= 0), and the trailing stop (disabled at
+   * <= 0): a retracement of `trailingStopPct` from the recorded peak. Because the
+   * peak only ratchets in the position's favour, the trailing stop never loosens.
+   */
+  exitReason(position: Position, currentPrice: number): string | null {
     const change = (currentPrice - position.entryPrice) / position.entryPrice;
-    const pct = position.side === "buy" ? change : -change;
-    const move = pct * 100;
-    return move <= -config.stopLossPct || move >= config.takeProfitPct;
+    const move = (position.side === "buy" ? change : -change) * 100;
+
+    if (move <= -config.stopLossPct) return "stop-loss";
+    if (config.takeProfitPct > 0 && move >= config.takeProfitPct) return "take-profit";
+
+    if (config.trailingStopPct > 0) {
+      const peak = position.peakPrice ?? position.entryPrice;
+      const retrace =
+        position.side === "buy" ? (peak - currentPrice) / peak : (currentPrice - peak) / peak;
+      if (retrace * 100 >= config.trailingStopPct) return "trailing-stop";
+    }
+    return null;
   }
 
   exitSide(position: Position): Side {

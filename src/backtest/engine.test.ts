@@ -83,6 +83,44 @@ describe("backtest", () => {
     expect(result.trades[0]!.pnl).toBeCloseTo(-10, 5);
   });
 
+  it("exits on a trailing stop after the peak retraces", () => {
+    // Long at 100, runs to 120 (peak), then retraces. A 10% trail exits at 108
+    // (120 * 0.9), locking in a gain rather than round-tripping to the stop.
+    const candles = candlesFromCloses([100, 110, 120, 115, 108]);
+    const strategy = new ScriptedStrategy(["buy", "hold", "hold", "hold", "hold"]);
+
+    const result = backtest(candles, strategy, {
+      initialCash: 1000,
+      positionUsd: 100,
+      feeRate: 0,
+      warmup: 0,
+      trailingStopPct: 10,
+    });
+
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]!.reason).toBe("trailing-stop");
+    expect(result.trades[0]!.exitPrice).toBe(108);
+    // amount = 1, exit 108 - entry 100 = 8
+    expect(result.trades[0]!.pnl).toBeCloseTo(8, 5);
+  });
+
+  it("treats a non-positive take-profit as disabled", () => {
+    // With TP disabled the winning long is held until end-of-data, not exited early.
+    const candles = candlesFromCloses([100, 200]);
+    const strategy = new ScriptedStrategy(["buy", "hold"]);
+
+    const result = backtest(candles, strategy, {
+      initialCash: 1000,
+      positionUsd: 100,
+      feeRate: 0,
+      warmup: 0,
+      takeProfitPct: 0,
+    });
+
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]!.reason).toBe("end-of-data");
+  });
+
   it("force-closes an open position at end of data", () => {
     const candles = candlesFromCloses([100, 105]);
     const strategy = new ScriptedStrategy(["buy", "hold"]);

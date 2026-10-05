@@ -97,6 +97,7 @@ async function main() {
       feeRate: Number(values.fee),
       stopLossPct: config.stopLossPct,
       takeProfitPct: config.takeProfitPct,
+      trailingStopPct: config.trailingStopPct,
     },
     metric,
     minTrades: Number(values["min-trades"]),
