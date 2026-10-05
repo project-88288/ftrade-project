@@ -201,6 +201,7 @@ async function main() {
       leverage: config.marketType === "future" ? config.leverage : undefined,
       marginMode: config.marketType === "future" ? config.marginMode : undefined,
       positionPct: config.positionPct > 0 ? config.positionPct : undefined,
+      trailingStopPct: config.trailingStopPct > 0 ? config.trailingStopPct : undefined,
     },
     "Starting ftrade bot",
   );
