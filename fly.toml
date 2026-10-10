@@ -18,9 +18,9 @@ primary_region = "sin"     # Singapore — Binance-friendly (avoid US regions)
 [env]
   # Market / strategy
   MARKET_TYPE = "future"
-  LEVERAGE = "10"
+  LEVERAGE = "5"
   MARGIN_MODE = "isolated"
-  POSITION_PCT = "0.20"
+  POSITION_PCT = "0.50"
   STRATEGY = "trendbreak"
   DONCHIAN_PERIOD = "40"      # breakout channel period
   TREND_PERIOD = "100"        # long SMA trend filter (must be > DONCHIAN_PERIOD)
