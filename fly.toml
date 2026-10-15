@@ -28,7 +28,7 @@ primary_region = "sin"     # Singapore — Binance-friendly (avoid US regions)
   SYMBOLS = "BTC/USDT"
   TIMEFRAME = "4h"
   SANDBOX = "false"
-  DRY_RUN = "false"
+  DRY_RUN = "true"
 
   # Risk
   MAX_POSITION_USD = "100"
